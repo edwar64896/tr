@@ -95,27 +95,29 @@ ol.pub li{margin:6px 0}
   </div>
 
   <div class="step hidden" id="step4">
-    <h2><span class="num">4</span> Publish it (all in the AWS website)</h2>
-    <p>Three quick steps in your web browser — no software to install:</p>
+    <h2><span class="num">4</span> Publish it</h2>
+    <p>Four steps — the same folder-and-sync routine you use for scans:</p>
     <ol class="pub">
-      <li><b>Upload.</b> Open the <b>S3</b> console → bucket
-          <code class="mono">trarchive-766743414531-eu-north-1-an</code> →
-          <b>Upload</b> → add the <code>catalogue.json</code> you just downloaded →
-          <b>Upload</b>. (Say yes to replacing the old one.)</li>
+      <li><b>Drop it in the archive folder.</b> Move the <code>catalogue.json</code> you
+          just downloaded into your local <b>“Archive Objects”</b> folder — the one your
+          scans and PDFs live in — replacing the old <code>catalogue.json</code>.
+          It must sit at the <em>top</em> of that folder, next to the image files
+          (not in a sub-folder).</li>
+      <li><b>Sync to S3.</b> Run <b>GoodSync</b> as usual. Check that
+          <code class="mono">catalogue.json</code> appears in the changes and the sync finishes.</li>
       <li><b>Clear the cache.</b> Open the <b>CloudFront</b> console → your distribution →
-          <b>Invalidations</b> tab → <b>Create invalidation</b> → type
+          <b>Invalidations</b> → <b>Create invalidation</b> → type
           <code class="mono">/catalogue.json</code> → <b>Create invalidation</b>.
           Wait until it says <em>Completed</em> (about a minute).</li>
       <li><b>Check.</b> Open
           <a href="https://dmfmj7c4s21wr.cloudfront.net/" target="_blank" rel="noopener">the website</a>
           and refresh — the new records are live.</li>
     </ol>
-    <p class="muted" style="margin-top:14px">Adding scans or PDFs? Upload them to the
-       <em>same bucket</em> with their exact MODES filenames
-       (e.g. <code class="mono">Z-DDJ-1-51a.jpeg</code>, <code class="mono">z-ddj-1-27.pdf</code>).
-       They're new files, so they don't need the cache-clearing step.</p>
-    <p class="muted">On a machine with the AWS CLI instead? One command does it all:
-       <code class="mono">./deploy/publish-catalogue.sh ~/Downloads/catalogue.json</code></p>
+    <p class="muted" style="margin-top:14px">New scans or PDFs just go in the same
+       “Archive Objects” folder with their exact MODES filenames
+       (e.g. <code class="mono">Z-DDJ-1-51a.jpeg</code>, <code class="mono">z-ddj-1-27.pdf</code>)
+       and ride along on the same GoodSync. Only <code>catalogue.json</code> needs the
+       cache-clearing step — new files don't.</p>
   </div>
 </main>
 
