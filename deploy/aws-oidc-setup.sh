@@ -36,10 +36,14 @@ else
 fi
 
 # 2. Trust policy — only this repo may assume the role.
-#    We match on the `repository` claim rather than `sub`: some accounts/orgs
-#    customize the OIDC subject to embed immutable numeric IDs (e.g.
-#    `repo:owner@1234/repo@5678:...`), which breaks a `repo:owner/repo:*`
-#    sub match. The `repository` claim stays the clean `owner/repo` form.
+#    AWS requires the trust to be scoped on `sub` (or `job_workflow_ref`), so we
+#    can't rely on `repository` alone. This account customizes the OIDC subject
+#    with immutable numeric IDs, so the real sub looks like
+#    `repo:owner@<ownerId>/repo@<repoId>:...` rather than `repo:owner/repo:...`.
+#    OIDC_SUB defaults to that confirmed value; override it if the IDs differ
+#    (find yours in the "Print OIDC token claims" workflow step). We also pin
+#    `aud` and `repository` as extra guards.
+OIDC_SUB="${OIDC_SUB:-repo:edwar64896@2887548/tr@1330152525:*}"
 cat > "$TMP/trust.json" <<JSON
 {
   "Version": "2012-10-17",
@@ -51,6 +55,9 @@ cat > "$TMP/trust.json" <<JSON
       "StringEquals": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
         "token.actions.githubusercontent.com:repository": "${GH_REPO}"
+      },
+      "StringLike": {
+        "token.actions.githubusercontent.com:sub": "${OIDC_SUB}"
       }
     }
   }]
