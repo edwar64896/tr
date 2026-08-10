@@ -152,10 +152,36 @@ GitHub assumes an IAM role at runtime, so **no AWS keys are stored in GitHub**.
 3. Confirm `AWS_REGION` and `ECR_REPO` in the workflow's `env:` block match
    your account.
 
-After that, each push builds and pushes `:latest` and `:<git-sha>` tags. The run
-summary prints the exact `docker pull`/`docker run` commands to deploy on the
-EC2 box. (Want it to deploy automatically too? That's a small follow-on step via
-SSM or SSH — ask and I'll add it.)
+After that, each push builds and pushes `:latest` and `:<git-sha>` tags.
+
+### Auto-deploy to EC2 (optional)
+
+The workflow's second job (`deploy`) pulls the new image onto the EC2 box and
+restarts the container — driven remotely via **SSM**, so no inbound SSH is
+needed. It stays **skipped until you set the repo variable `EC2_INSTANCE_ID`**.
+
+One-time setup:
+
+1. Give the instance an IAM role for SSM + ECR-read, and attach it:
+   ```bash
+   EC2_INSTANCE_ID=i-0123... AWS_REGION=eu-west-2 ./deploy/ec2-instance-role.sh
+   ```
+   (If the SSM agent isn't running on Ubuntu:
+   `sudo snap install amazon-ssm-agent --classic && sudo snap start amazon-ssm-agent`.)
+2. Grant the CI role permission to call SSM — re-run the OIDC setup, which now
+   adds an `ssm-deploy` policy (optionally scoped to just this instance):
+   ```bash
+   EC2_INSTANCE_ID=i-0123... AWS_REGION=eu-west-2 ./deploy/aws-oidc-setup.sh
+   ```
+3. Turn the job on by setting the repo variable:
+   ```bash
+   gh variable set EC2_INSTANCE_ID --body i-0123...
+   ```
+
+Now every green build also runs, on the box:
+`docker login` → `docker pull …:latest` → `docker rm -f tr-archive` →
+`docker run … -p 80:80 …:latest`. The job polls the SSM command and fails if the
+on-box deploy fails, surfacing its output in the run log.
 
 ---
 

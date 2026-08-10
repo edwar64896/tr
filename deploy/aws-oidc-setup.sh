@@ -99,6 +99,30 @@ echo "[3/5] Attaching ECR push policy..."
 aws iam put-role-policy --role-name "$ROLE_NAME" \
   --policy-name ecr-push --policy-document "file://$TMP/ecr.json"
 
+# 4b. SSM deploy permissions so the workflow can pull-and-restart on the box.
+#     SendCommand is scoped to the target instance (if EC2_INSTANCE_ID is set,
+#     else any instance in the account) plus the RunShellScript document.
+SSM_INSTANCE_ARN="arn:aws:ec2:${AWS_REGION}:${ACCOUNT_ID}:instance/${EC2_INSTANCE_ID:-*}"
+cat > "$TMP/ssm.json" <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": [
+        "${SSM_INSTANCE_ARN}",
+        "arn:aws:ssm:${AWS_REGION}::document/AWS-RunShellScript"
+      ] },
+    { "Effect": "Allow",
+      "Action": [ "ssm:GetCommandInvocation", "ssm:ListCommandInvocations" ],
+      "Resource": "*" }
+  ]
+}
+JSON
+echo "[3b] Attaching SSM deploy policy..."
+aws iam put-role-policy --role-name "$ROLE_NAME" \
+  --policy-name ssm-deploy --policy-document "file://$TMP/ssm.json"
+
 # 5. Ensure the ECR repository exists.
 if aws ecr describe-repositories --repository-names "$ECR_REPO" --region "$AWS_REGION" >/dev/null 2>&1; then
   echo "[4/5] ECR repo $ECR_REPO already exists."
