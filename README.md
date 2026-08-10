@@ -94,11 +94,42 @@ aws s3 sync scans/ s3://YOUR-BUCKET/scans/          # if/when you have scans
 #   var IMAGE_BASE = "https://dXXXX.cloudfront.net/scans/";
 ```
 
-Rough cost: a catalogue this size sits comfortably in the S3/CloudFront free
-tier — pennies a month once past it. If search ever needs to scale to millions
-of records or server-side ranking, the natural next step is **Amazon OpenSearch
-Serverless** with a small **Lambda** API, but that is deliberately out of scope
-for this POC.
+If search ever needs to scale to millions of records or server-side ranking,
+the natural next step is **Amazon OpenSearch Serverless** with a small
+**Lambda** API, but that is deliberately out of scope for this POC.
+
+### Cost estimate
+
+Scenario: ~**50 GB** of scanned images, HTTPS but no custom DNS (domain hosted
+elsewhere), **very limited / infrequent** traffic. Figures are us-east-1;
+London (eu-west-2) is ~5% more. Treat as estimates — AWS pricing and free-tier
+rules change.
+
+**Recommended — S3 + CloudFront, no server (~$1–2/month):**
+
+| Item | Basis | Monthly |
+|---|---|---|
+| S3 storage (50 GB, Standard-IA) | $0.0125/GB — fits "infrequent" | ~$0.63 |
+| — or S3 Standard | $0.023/GB, simpler | ~$1.15 |
+| S3 requests | pennies at low traffic | ~$0.00 |
+| Data egress | first 100 GB/mo free AWS-wide; won't be hit | $0.00 |
+| CloudFront (CDN + HTTPS) | perpetual free tier: 1 TB + 10M req/mo | $0.00 |
+| **Total** | | **≈ $1–2** |
+
+Plus a one-time ~$0.25 for the PUT requests to upload 50 GB (ingress is free).
+No Route 53 (DNS is hosted elsewhere) = $0. The S3 website endpoint is
+HTTP-only, so CloudFront is what gives you a free `https://….cloudfront.net`
+URL — worth having and free at this volume.
+
+**If you want a server instead (EC2 `t3.micro` running the container):** ~$7.50/mo
+on-demand after the free/intro period, plus ~$4/mo EBS for the 50 GB ≈
+**$11–12/month** — more cost and upkeep for no benefit on a static site. Note
+AWS revised the free tier in mid-2025: older accounts get 12 months free,
+newer accounts get intro credits (~$100–200) instead, so "free" depends on the
+account's age.
+
+**Bottom line:** at infrequent use, S3 + CloudFront is effectively free
+(~$1–2/mo); keep the Docker image for local testing only.
 
 ---
 
