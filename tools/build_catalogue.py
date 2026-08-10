@@ -52,6 +52,17 @@ def image_basename(win_path):
     return re.split(r"[\\/]", win_path.strip())[-1]
 
 
+IMAGE_EXTS = {"jpg", "jpeg", "png", "gif", "webp", "tif", "tiff", "bmp"}
+
+
+def file_ext(fn):
+    return fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+
+
+def is_image(fn):
+    return file_ext(fn) in IMAGE_EXTS
+
+
 def year_of(raw):
     """Best-effort 4-digit year from a messy DateBegin field."""
     if not raw:
@@ -85,22 +96,25 @@ def build(src):
         if not number:
             continue
 
-        # Scanned images (Reproduction) and other attached media such as PDFs
-        # (References@multimedia). Both are reduced to a bare filename — the
-        # original Windows/OneDrive folder path is stripped — so each maps
-        # directly to a flat key in the S3 bucket.
-        images = []
-        for r in o.findall("Reproduction"):
-            fn = image_basename((r.findtext("Filename") or "").strip())
-            if fn:
-                images.append(fn)
+        # Files attached to the record come from two places: scanned images in
+        # <Reproduction>, and other files (PDFs, ZIPs) in <References> — the
+        # latter with or without an elementtype attribute. Collect both, strip
+        # the original Windows/OneDrive folder (so each is a flat S3 key), and
+        # route by extension: images render as thumbnails, everything else
+        # (PDFs, ZIPs, …) as downloadable/viewable files.
+        images, media, seen = [], [], set()
 
-        media = []
+        def add_file(raw):
+            fn = image_basename((raw or "").strip())
+            if not fn or fn in seen:
+                return
+            seen.add(fn)
+            (images if is_image(fn) else media).append(fn)
+
+        for r in o.findall("Reproduction"):
+            add_file(r.findtext("Filename"))
         for r in o.findall("References"):
-            if r.get("elementtype") == "multimedia":
-                fn = image_basename((r.findtext("Filename") or "").strip())
-                if fn:
-                    media.append(fn)
+            add_file(r.findtext("Filename"))
 
         date_begin = t(o, "Production/Date/DateBegin")
         rec = {
@@ -142,6 +156,8 @@ def summarise(records):
         "count": len(records),
         "withImages": sum(1 for r in records if r["images"]),
         "totalImages": sum(len(r["images"]) for r in records),
+        "withMedia": sum(1 for r in records if r["media"]),
+        "totalMedia": sum(len(r["media"]) for r in records),
         "classifications": top("classification").most_common(),
         "locations": top("location").most_common(),
     }
@@ -159,7 +175,8 @@ def main():
     payload = {
         "fonds": "Z/DDJ — Talyllyn Railway Company Archive",
         "generated": "static export",
-        "summary": {k: summary[k] for k in ("count", "withImages", "totalImages")},
+        "summary": {k: summary[k] for k in
+                    ("count", "withImages", "totalImages", "withMedia", "totalMedia")},
         "records": records,
     }
     out_dir = os.path.dirname(args.out)

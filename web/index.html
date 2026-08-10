@@ -159,6 +159,7 @@ main{padding:18px clamp(14px,3vw,32px) 80px;min-width:0}
 .pill.cls{background:var(--brass-soft);color:var(--brass);border-color:transparent}
 .pill.yr{font-variant-numeric:tabular-nums}
 .pill.img{background:var(--green);color:#fff;border-color:transparent;display:inline-flex;align-items:center;gap:4px}
+.pill.file{background:var(--brass);color:#fff;border-color:transparent;display:inline-flex;align-items:center;gap:4px}
 .sentinel{height:1px}
 .more{grid-column:1/-1;text-align:center;color:var(--muted);padding:14px;font-size:13px}
 .empty{padding:60px 20px;text-align:center;color:var(--muted)}
@@ -198,9 +199,24 @@ main{padding:18px clamp(14px,3vw,32px) 80px;min-width:0}
 .media{margin-top:16px}
 .mediahd{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-family:inherit;font-weight:700;margin-bottom:8px}
 .mediafile{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
-  margin-bottom:6px;text-decoration:none;color:var(--ink);font-size:13px}
+  margin-bottom:6px;text-decoration:none;color:var(--ink);font-size:13px;width:100%;background:var(--surface);
+  cursor:pointer;text-align:left;font-family:inherit}
 .mediafile:hover{border-color:var(--green)}
-.mediafile .ext{background:var(--green);color:#fff;border-radius:5px;padding:2px 7px;font-size:11px;flex:0 0 auto}
+.mediafile .ext{background:var(--green);color:#fff;border-radius:5px;padding:2px 7px;font-size:11px;flex:0 0 auto;font-weight:700}
+.mediafile .go{margin-left:auto;color:var(--muted);font-size:12px;flex:0 0 auto}
+.thumb[data-view]{cursor:pointer}
+.thumb[data-view]:hover{border-color:var(--green)}
+/* inline image / PDF viewer */
+.viewer{position:fixed;inset:0;z-index:60;background:rgba(10,16,14,.82);display:none;flex-direction:column}
+.viewer.open{display:flex}
+.vbar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.vname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)}
+.vbtn{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:7px;padding:7px 12px;
+  cursor:pointer;font-size:13px;text-decoration:none;flex:0 0 auto}
+.vbtn:hover{border-color:var(--green)}
+.vbody{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:16px}
+.vbody img{max-width:100%;max-height:100%;object-fit:contain;box-shadow:var(--shadow-lg);background:#fff}
+.vbody iframe{width:100%;height:100%;border:0;background:#fff;border-radius:4px}
 .imgbanner{font-size:12px;color:var(--muted);margin:2px 0 0;display:flex;align-items:center;gap:7px}
 .imgbanner code{background:var(--surface-2);padding:1px 5px;border-radius:4px}
 
@@ -233,7 +249,7 @@ footer{border-top:1px solid var(--line);padding:20px clamp(14px,3vw,32px);color:
       <input id="q" type="search" placeholder="Search titles, references, notes…" autocomplete="off" spellcheck="false">
       <button class="clr" id="clrq" title="Clear">×</button>
     </div>
-    <label class="switch"><input type="checkbox" id="imgOnly"> Only items with scanned images</label>
+    <label class="switch"><input type="checkbox" id="imgOnly"> Only items with scans or files</label>
 
     <div class="facet">
       <h3>Decade <button class="reset" data-reset="decade" hidden>clear</button></h3>
@@ -273,6 +289,15 @@ footer{border-top:1px solid var(--line);padding:20px clamp(14px,3vw,32px);color:
 
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
+
+<div class="viewer" id="viewer" aria-hidden="true">
+  <div class="vbar">
+    <span class="vname mono" id="vname"></span>
+    <a class="vbtn" id="vopen" target="_blank" rel="noopener">Open in new tab ↗</a>
+    <button class="vbtn" id="vclose" title="Close (Esc)">Close ×</button>
+  </div>
+  <div class="vbody" id="vbody"></div>
+</div>
 
 <footer>
   Prototype catalogue viewer · data from the MODES XML export ·
@@ -331,8 +356,8 @@ function boot(DATA){
   var stats = [
     [DATA.summary.count.toLocaleString(),"Catalogue records"],
     [uniq(RECORDS,"classification").length,"Classifications"],
-    [DATA.summary.withImages,"Illustrated"],
-    [DATA.summary.totalImages,"Scanned images"]
+    [DATA.summary.totalImages,"Scanned images"],
+    [(DATA.summary.totalMedia||0),"Attached files"]
   ];
   document.getElementById("stats").innerHTML = stats.map(function(s){
     return '<div class="stat"><b>'+s[0]+'</b><span>'+s[1]+'</span></div>';
@@ -354,7 +379,7 @@ function boot(DATA){
     var terms = state.q.toLowerCase().split(/\s+/).filter(Boolean);
     return RECORDS.filter(function(r){
       if(terms.length && !terms.every(function(t){return r._s.indexOf(t)>=0;})) return false;
-      if(state.imgOnly && !r.images.length) return false;
+      if(state.imgOnly && !(r.images.length || (r.media && r.media.length))) return false;
       if(except!=="decade" && state.decade!==null && r._dec!==state.decade) return false;
       if(except!=="classification" && state.classification.size && !state.classification.has(r.classification)) return false;
       if(except!=="location" && state.location.size && !state.location.has(r.location)) return false;
@@ -447,6 +472,7 @@ function boot(DATA){
     if(r.classification) meta.push('<span class="pill cls">'+esc(r.classification)+'</span>');
     if(r.year) meta.push('<span class="pill yr">'+r.year+'</span>');
     if(r.images.length) meta.push('<span class="pill img">▤ '+r.images.length+'</span>');
+    if(r.media && r.media.length) meta.push('<span class="pill file">▦ '+r.media.length+'</span>');
     return '<article class="card" data-id="'+esc(r.id)+'">'+
       '<div class="ref mono">'+esc(r.id)+'</div>'+
       '<div class="ttl">'+esc(r.title)+'</div>'+
@@ -458,7 +484,7 @@ function boot(DATA){
     if(state.decade!==null) chips.push(chip(state.decade+"s","decade"));
     state.classification.forEach(function(v){chips.push(chip(v,"classification",v));});
     state.location.forEach(function(v){chips.push(chip(v,"location",v));});
-    if(state.imgOnly) chips.push(chip("illustrated only","imgOnly"));
+    if(state.imgOnly) chips.push(chip("scans/files only","imgOnly"));
     document.getElementById("activeChips").innerHTML = chips.join("");
   }
   function chip(label,kind,val){
@@ -486,20 +512,29 @@ function boot(DATA){
       gallery = '<p class="imgbanner">▤ '+r.images.length+' scanned image'+(r.images.length>1?'s':'')+
         (IMAGE_BASE ? '' : ' · set <code class="mono">IMAGE_BASE</code> to load them')+'</p>'+
         '<div class="gallery">'+ r.images.map(function(fn){
-          var cell = IMAGE_BASE
-            ? '<a href="'+esc(assetURL(fn))+'" target="_blank" rel="noopener">'+
-                '<img loading="lazy" src="'+esc(assetURL(fn))+'" alt="'+esc(fn)+'"></a>'
-            : '<div class="ph"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5L5 19"/></svg><span style="font-size:10px">scan</span></div>';
-          return '<div class="thumb">'+cell+'<div class="cap mono" title="'+esc(fn)+'">'+esc(fn)+'</div></div>';
+          if(!IMAGE_BASE){
+            return '<div class="thumb"><div class="ph"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5L5 19"/></svg><span style="font-size:10px">scan</span></div><div class="cap mono" title="'+esc(fn)+'">'+esc(fn)+'</div></div>';
+          }
+          return '<div class="thumb" data-view="image" data-url="'+esc(assetURL(fn))+'">'+
+            '<img loading="lazy" src="'+esc(assetURL(fn))+'" alt="'+esc(fn)+'">'+
+            '<div class="cap mono" title="'+esc(fn)+'">'+esc(fn)+'</div></div>';
         }).join("") + '</div>';
     }
     var media = "";
     if(r.media && r.media.length){
       media = '<div class="media"><h3 class="mediahd">Attached files</h3>'+
         r.media.map(function(fn){
-          return '<a class="mediafile" href="'+esc(assetURL(fn))+'" target="_blank" rel="noopener">'+
-            '<span class="ext mono">'+esc((fn.split(".").pop()||"file").toUpperCase())+'</span>'+
-            '<span class="mono" style="min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(fn)+'</span></a>';
+          var url = assetURL(fn), ext = (fn.indexOf(".")>=0 ? fn.split(".").pop() : "file").toLowerCase();
+          if(ext === "pdf"){
+            return '<button type="button" class="mediafile" data-view="pdf" data-url="'+esc(url)+'">'+
+              '<span class="ext mono">PDF</span>'+
+              '<span class="mono" style="min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(fn)+'</span>'+
+              '<span class="go">view ›</span></button>';
+          }
+          return '<a class="mediafile" href="'+esc(url)+'" target="_blank" rel="noopener">'+
+            '<span class="ext mono">'+esc(ext.toUpperCase())+'</span>'+
+            '<span class="mono" style="min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(fn)+'</span>'+
+            '<span class="go">download ›</span></a>';
         }).join("") + '</div>';
     }
     var note = r.notes ? '<div class="note"><b>Curator’s note:</b> '+esc(r.notes)+'</div>' : "";
@@ -522,6 +557,33 @@ function boot(DATA){
     document.getElementById("drawer").setAttribute("aria-hidden","true");
     document.getElementById("scrim").classList.remove("open");
   }
+
+  // ---- Inline viewer (images + PDFs) ----
+  function openViewer(url, kind){
+    var vb = document.getElementById("vbody");
+    vb.innerHTML = kind === "pdf"
+      ? '<iframe src="'+esc(url)+'" title="PDF preview"></iframe>'
+      : '<img src="'+esc(url)+'" alt="">';
+    document.getElementById("vopen").href = url;
+    document.getElementById("vname").textContent = decodeURIComponent(url.split("/").pop());
+    var v = document.getElementById("viewer");
+    v.classList.add("open"); v.setAttribute("aria-hidden","false");
+  }
+  function closeViewer(){
+    var v = document.getElementById("viewer");
+    v.classList.remove("open"); v.setAttribute("aria-hidden","true");
+    document.getElementById("vbody").innerHTML = "";   // stop the iframe/img loading
+  }
+  function viewerOpen(){ return document.getElementById("viewer").classList.contains("open"); }
+  // Delegated: any [data-view] element in the drawer opens the viewer.
+  document.getElementById("drawer").addEventListener("click", function(e){
+    var el = e.target.closest("[data-view]"); if(!el) return;
+    openViewer(el.getAttribute("data-url"), el.getAttribute("data-view"));
+  });
+  document.getElementById("vclose").onclick = closeViewer;
+  document.getElementById("viewer").addEventListener("click", function(e){
+    if(e.target === this) closeViewer();   // click backdrop (not the bar/body)
+  });
 
   // ---- Events ----
   var qEl = document.getElementById("q"), tmr;
@@ -565,7 +627,7 @@ function boot(DATA){
   });
   document.getElementById("scrim").onclick=closeDrawer;
   document.addEventListener("keydown", function(e){
-    if(e.key==="Escape") closeDrawer();
+    if(e.key==="Escape"){ if(viewerOpen()) closeViewer(); else closeDrawer(); }
     if(e.key==="/" && document.activeElement!==qEl){ e.preventDefault(); qEl.focus(); }
   });
 

@@ -120,6 +120,8 @@ var LOCATION_FIXUPS = { "Dogellau Archive 2nd Deposit": "Dolgellau Archive 2nd D
 
 function basename(p){ return p ? p.trim().split(/[\\/]/).pop() : ""; }
 function yearOf(raw){ if(!raw) return null; var m=raw.match(/(1[89]\d{2}|20\d{2})/); return m?parseInt(m[1],10):null; }
+var IMAGE_EXTS = {jpg:1,jpeg:1,png:1,gif:1,webp:1,tif:1,tiff:1,bmp:1};
+function isImage(fn){ var e=fn.indexOf(".")>=0?fn.split(".").pop().toLowerCase():""; return !!IMAGE_EXTS[e]; }
 
 // The export uses Windows-1252 code points as numeric references (e.g. &#150;
 // for an en-dash), which XML resolves to C1 control chars (U+0080-U+009F).
@@ -144,14 +146,15 @@ function convert(xmlText){
     var number = txt(o, "ObjectIdentity > Number");
     if(!number) return;
 
-    var images = [];
-    o.querySelectorAll("Reproduction > Filename").forEach(function(f){
-      var fn = basename(f.textContent||""); if(fn) images.push(fn);
-    });
-    var media = [];
-    o.querySelectorAll('References[elementtype="multimedia"] > Filename').forEach(function(f){
-      var fn = basename(f.textContent||""); if(fn) media.push(fn);
-    });
+    // Files: scanned images in <Reproduction>, other files (PDFs, ZIPs) in
+    // <References> (with or without an elementtype). Route by extension, dedup.
+    var images = [], media = [], seen = {};
+    function addFile(raw){
+      var fn = basename(raw||""); if(!fn || seen[fn]) return; seen[fn]=1;
+      (isImage(fn) ? images : media).push(fn);
+    }
+    o.querySelectorAll("Reproduction > Filename").forEach(function(f){ addFile(f.textContent); });
+    o.querySelectorAll("References > Filename").forEach(function(f){ addFile(f.textContent); });
 
     // ObjectName simple-name / current location need attribute-scoped lookups.
     var objName="", loc="";
