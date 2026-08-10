@@ -129,6 +129,36 @@ in front for a free `https://….cloudfront.net` URL with no domain.
 
 ---
 
+## CI: build & push to ECR with GitHub Actions
+
+`.github/workflows/build-push-ecr.yml` builds the image and pushes it to ECR on
+every push (and via the *Run workflow* button). It authenticates with **OIDC** —
+GitHub assumes an IAM role at runtime, so **no AWS keys are stored in GitHub**.
+
+**One-time setup:**
+
+1. Run the IAM setup (AWS CLI configured as an admin). It creates the GitHub
+   OIDC provider, a role scoped to this repo, ECR push permissions, and the ECR
+   repo itself:
+   ```bash
+   AWS_REGION=eu-west-2 ./deploy/aws-oidc-setup.sh
+   ```
+2. Copy the role ARN it prints into the repo secret **`AWS_ROLE_ARN`**
+   (*Settings → Secrets and variables → Actions*), or:
+   ```bash
+   gh secret set AWS_ROLE_ARN --body "$(aws iam get-role \
+     --role-name github-actions-ecr-push --query Role.Arn --output text)"
+   ```
+3. Confirm `AWS_REGION` and `ECR_REPO` in the workflow's `env:` block match
+   your account.
+
+After that, each push builds and pushes `:latest` and `:<git-sha>` tags. The run
+summary prints the exact `docker pull`/`docker run` commands to deploy on the
+EC2 box. (Want it to deploy automatically too? That's a small follow-on step via
+SSM or SSH — ask and I'll add it.)
+
+---
+
 ## Deploy to AWS as a static site (lowest cost / no server)
 
 Because it's a static site, hosting is a two-service story:
