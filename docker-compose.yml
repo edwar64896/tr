@@ -1,0 +1,14 @@
+# Convenience wrapper so a non-technical mate only needs:
+#     docker compose up
+# then browse to http://localhost:8080
+services:
+  archive:
+    build: .
+    image: tr-archive:poc
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    # To show real scans, uncomment and drop JPEGs (named e.g. Z-DDJ-1-51a.jpeg)
+    # into ./scans, then set IMAGE_BASE = "/scans/" in web/index.html.
+    # volumes:
+    #   - ./scans:/usr/share/nginx/html/scans:ro
