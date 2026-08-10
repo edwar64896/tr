@@ -36,6 +36,10 @@ else
 fi
 
 # 2. Trust policy — only this repo may assume the role.
+#    We match on the `repository` claim rather than `sub`: some accounts/orgs
+#    customize the OIDC subject to embed immutable numeric IDs (e.g.
+#    `repo:owner@1234/repo@5678:...`), which breaks a `repo:owner/repo:*`
+#    sub match. The `repository` claim stays the clean `owner/repo` form.
 cat > "$TMP/trust.json" <<JSON
 {
   "Version": "2012-10-17",
@@ -44,8 +48,10 @@ cat > "$TMP/trust.json" <<JSON
     "Principal": { "Federated": "${OIDC_ARN}" },
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
-      "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-      "StringLike":   { "token.actions.githubusercontent.com:sub": "repo:${GH_REPO}:*" }
+      "StringEquals": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:repository": "${GH_REPO}"
+      }
     }
   }]
 }
