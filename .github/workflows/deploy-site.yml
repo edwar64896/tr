@@ -1,0 +1,64 @@
+name: Deploy site to S3 + CloudFront
+
+# Static hosting — no server. On a change to the app shell, upload it to the S3
+# bucket and invalidate CloudFront. Auth is via OIDC (no stored AWS keys).
+#
+# NOTE: this deploys index.html + admin.html only. catalogue.json is deliberately
+# NOT touched here — it is owned by the admin/publish flow (Mark's uploads via
+# deploy/publish-catalogue.sh), so a code deploy never clobbers live data.
+# Bootstrap the first catalogue.json with deploy/publish-site.sh.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - claude/xml-artifact-search-prototype-ds6ntr
+    paths:
+      - "web/index.html"
+      - "web/admin.html"
+      - ".github/workflows/deploy-site.yml"
+
+env:
+  AWS_REGION: eu-north-1
+  BUCKET: trarchive-766743414531-eu-north-1-an
+  CF_DOMAIN: dmfmj7c4s21wr.cloudfront.net
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Upload app shell
+        run: |
+          aws s3 cp web/index.html s3://$BUCKET/index.html \
+            --content-type text/html --cache-control no-cache
+          aws s3 cp web/admin.html s3://$BUCKET/admin.html \
+            --content-type text/html --cache-control no-cache
+
+      - name: Invalidate CloudFront
+        run: |
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?DomainName=='$CF_DOMAIN'].Id | [0]" --output text)
+          echo "distribution: $DIST_ID"
+          aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
+            --paths /index.html /admin.html
+
+      - name: Summary
+        run: |
+          echo "Deployed **index.html** + **admin.html** to https://$CF_DOMAIN/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "catalogue.json is managed via the admin / \`publish-catalogue.sh\` flow." >> $GITHUB_STEP_SUMMARY

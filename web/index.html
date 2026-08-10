@@ -295,8 +295,8 @@ footer{border-top:1px solid var(--line);padding:20px clamp(14px,3vw,32px);color:
                  can be refreshed without rebuilding the site (that bucket then
                  needs a CORS rule allowing GET; see README / admin page).
    ============================================================ */
-var IMAGE_BASE = "https://trarchive-766743414531-eu-north-1-an.s3.eu-north-1.amazonaws.com/";
-var CATALOGUE_URL = "https://trarchive-766743414531-eu-north-1-an.s3.eu-north-1.amazonaws.com/catalogue.json";
+var IMAGE_BASE = "https://dmfmj7c4s21wr.cloudfront.net/";
+var CATALOGUE_URL = "https://dmfmj7c4s21wr.cloudfront.net/catalogue.json";
 
 /* Build a URL for an image / media file from its bare filename. */
 function assetURL(fn){ return IMAGE_BASE + encodeURIComponent(fn); }

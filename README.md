@@ -27,56 +27,61 @@ no database, and no running costs to speak of.**
   notes, and a gallery of its scanned images.
 - **Light / dark themes**, responsive down to mobile.
 
-### Images & attached media (served from S3)
-The XML references files by their original OneDrive paths; the build **strips the
-folder** from every scanned image (`Reproduction`) and attached file such as a
-PDF (`References` multimedia), leaving a bare filename (e.g. `Z-DDJ-1-51a.jpeg`)
-that maps directly to a flat key in the S3 bucket. The files themselves are not
-in the export — they live in the bucket:
+## Hosting: S3 + CloudFront (no server)
+
+The site is a static bundle — `index.html`, `admin.html`, `catalogue.json` — plus
+the scanned images/PDFs, all in one S3 bucket, served over HTTPS by CloudFront:
 
 ```
-s3://trarchive-766743414531-eu-north-1-an
+bucket:      s3://trarchive-766743414531-eu-north-1-an   (eu-north-1)
+distribution: https://dmfmj7c4s21wr.cloudfront.net
 ```
 
-The app builds each URL as `IMAGE_BASE + <url-encoded filename>` (filenames with
-spaces/parentheses are handled). `IMAGE_BASE` is set at the top of
-`web/index.html` and currently points at that bucket's HTTPS endpoint. For the
-images to load in the browser the objects must be **publicly readable**, or the
-bucket fronted by **CloudFront** (then set `IMAGE_BASE` to the CloudFront domain).
-Set `IMAGE_BASE = ""` to fall back to labelled placeholders.
+`web/index.html` is wired to that distribution:
+
+```js
+var IMAGE_BASE    = "https://dmfmj7c4s21wr.cloudfront.net/";
+var CATALOGUE_URL = "https://dmfmj7c4s21wr.cloudfront.net/catalogue.json";
+```
+
+Each image URL is `IMAGE_BASE + <url-encoded filename>` (filenames with
+spaces/parentheses are handled). Because everything is served from the one
+CloudFront origin it's effectively same-origin, so no CORS is needed. With
+CloudFront in front you can keep the bucket **private** (Origin Access Control)
+— no public-read required. Set `IMAGE_BASE = ""` to fall back to placeholders.
+
+**Deploy the site** (once EC2 is retired — no server in production):
+
+```bash
+AWS_REGION=eu-north-1 ./deploy/publish-site.sh
+```
+
+This uploads the three site files and invalidates CloudFront. Set the
+distribution's **Default Root Object** to `index.html` so the bare domain loads
+the catalogue. Scanned images/PDFs are uploaded straight to the bucket with their
+exact MODES filenames (new keys, so no invalidation needed).
 
 ### Updating the catalogue (for Mark) — `admin.html`
-When new artifacts are added, re-export from MODES and use the **Update the
-catalogue** page (linked in the site header, or open `/admin.html`). It runs
-entirely in the browser: choose the `.xml`, it converts it to `catalogue.json`
-(identical logic to `tools/build_catalogue.py` — verified byte-for-byte), shows a
-summary, and downloads the file. Then publish it:
+When new artifacts are added, re-export from MODES and open the **Update the
+catalogue** page (linked in the site header, or `/admin.html`). It runs entirely
+in the browser: choose the `.xml`, it converts to `catalogue.json` (identical
+logic to `tools/build_catalogue.py` — verified byte-for-byte), shows a summary,
+and downloads the file. Then publish it in one step:
 
 ```bash
-aws s3 cp catalogue.json s3://trarchive-766743414531-eu-north-1-an/catalogue.json
+./deploy/publish-catalogue.sh ~/Downloads/catalogue.json
 ```
 
-`CATALOGUE_URL` (top of `web/index.html`) is already set to that object's URL, so
-the site loads the data straight from the bucket — Mark's uploads go live on the
-next refresh, no rebuild. (The inline demo build ignores it; the offline bundle
-still works.) To turn that off, set `CATALOGUE_URL = ""` and the copy served
-beside `index.html` is used instead.
+That uploads it and invalidates `/catalogue.json`, so the change is live on the
+next refresh — **no server, no rebuild**. (Both publish scripts look up the
+CloudFront distribution ID from its domain automatically.)
 
-### One-time bucket setup
+### CORS / public-read (only if not fronting the site with CloudFront)
 
-Run once (with the AWS CLI configured). It applies CORS (so the fetch works),
-uploads the current `catalogue.json`, and — with `ALLOW_PUBLIC=yes` — makes the
-objects publicly readable so images/PDFs load:
-
-```bash
-ALLOW_PUBLIC=yes AWS_REGION=eu-north-1 ./deploy/s3-setup.sh
-```
-
-It uses `deploy/s3-cors.json` and `deploy/s3-bucket-policy.json`. Public-read is
-the simplest option for a POC; the private alternative is CloudFront + Origin
-Access Control, then point `IMAGE_BASE`/`CATALOGUE_URL` at the CloudFront domain.
-Leave off `ALLOW_PUBLIC` to apply only CORS + upload (e.g. if you'll use
-CloudFront).
+If instead you serve the site from somewhere else and only pull assets from S3
+directly, run `./deploy/s3-setup.sh` (optionally `ALLOW_PUBLIC=yes`) to apply
+`deploy/s3-cors.json` and `deploy/s3-bucket-policy.json`. Not needed for the
+all-CloudFront setup above.
 
 ---
 
@@ -116,136 +121,57 @@ cd web && python3 -m http.server 8080
 
 ---
 
-## Deploy to EC2 for a quick HTTP test
+## Continuous deployment (GitHub Actions → S3 + CloudFront)
 
-Run the exact container on an EC2 box and reach it at `http://<public-ip>` — no
-domain, no certificate, no Caddy. (nginx inside the image already serves the
-site; Caddy is only worth adding later, for automatic HTTPS, and only once a DNS
-name points at the instance.)
+`.github/workflows/deploy-site.yml` deploys the site on every push that touches
+`web/index.html`/`web/admin.html` (and via the *Run workflow* button). It
+authenticates with **OIDC** — GitHub assumes an IAM role at runtime, so **no AWS
+keys are stored in GitHub** — then uploads the app shell to the bucket and
+invalidates CloudFront.
 
-**1. Launch an instance.** Amazon Linux 2023, `t3.small` is ample. In its
-security group allow inbound **TCP 80** (from your own IP for a private test, or
-`0.0.0.0/0` to share the link). Paste `deploy/ec2-user-data.sh` into
-*Advanced details → User data* so Docker is installed at first boot.
-
-**2. Get the image onto the box** — pick one:
-
-*Option A — copy it directly, no registry:*
-```bash
-# on your machine
-docker build -t tr-archive:poc .
-docker save tr-archive:poc | gzip | \
-  ssh -i key.pem ec2-user@<public-ip> 'gunzip | docker load'
-```
-
-*Option B — via ECR* (better if you'll iterate; the instance needs an IAM role
-with ECR read access):
-```bash
-ACCT=<acct-id>; REGION=<region>
-aws ecr create-repository --repository-name tr-archive --region $REGION
-aws ecr get-login-password --region $REGION | \
-  docker login --username AWS --password-stdin $ACCT.dkr.ecr.$REGION.amazonaws.com
-docker build -t $ACCT.dkr.ecr.$REGION.amazonaws.com/tr-archive:poc .
-docker push  $ACCT.dkr.ecr.$REGION.amazonaws.com/tr-archive:poc
-# then on the EC2 box: docker pull <same-image-name>
-```
-
-**3. Run it on port 80** (on the EC2 box):
-```bash
-docker run -d --name tr-archive --restart unless-stopped -p 80:80 tr-archive:poc
-```
-
-**4. Open** `http://<public-ip>`. The catalogue loads; image references show as
-placeholders until you add scans.
-
-**Adding the 50 GB of scans later:** don't bake them into the image. Attach an
-EBS volume (or mount an S3 path), then run with
-`-v /data/scans:/usr/share/nginx/html/scans:ro` and set
-`var IMAGE_BASE = "/scans/";` in `web/index.html`.
-
-**Adding HTTPS later:** point a DNS name at the instance and drop **Caddy** in
-front (one-line Caddyfile, automatic Let's Encrypt certs), or put **CloudFront**
-in front for a free `https://….cloudfront.net` URL with no domain.
-
----
-
-## CI: build & push to ECR with GitHub Actions
-
-`.github/workflows/build-push-ecr.yml` builds the image and pushes it to ECR on
-every push (and via the *Run workflow* button). It authenticates with **OIDC** —
-GitHub assumes an IAM role at runtime, so **no AWS keys are stored in GitHub**.
+It deliberately deploys **only `index.html` + `admin.html`**. `catalogue.json` is
+owned by the admin/publish flow (Mark's uploads), so a code deploy never clobbers
+live data. Bootstrap the first `catalogue.json` with `deploy/publish-site.sh`.
 
 **One-time setup:**
 
-1. Run the IAM setup (AWS CLI configured as an admin). It creates the GitHub
-   OIDC provider, a role scoped to this repo, ECR push permissions, and the ECR
-   repo itself:
+1. Run the IAM setup (AWS CLI as admin). It creates the GitHub OIDC provider, a
+   repo-scoped role, and grants **S3 write + CloudFront invalidation** (removing
+   the old ECR/SSM permissions if present):
    ```bash
-   AWS_REGION=eu-west-2 ./deploy/aws-oidc-setup.sh
+   AWS_REGION=eu-north-1 ./deploy/aws-oidc-setup.sh
    ```
-2. Copy the role ARN it prints into the repo secret **`AWS_ROLE_ARN`**
-   (*Settings → Secrets and variables → Actions*), or:
+2. Set the role ARN it prints as the repo secret **`AWS_ROLE_ARN`** (unchanged if
+   you had it before):
    ```bash
    gh secret set AWS_ROLE_ARN --body "$(aws iam get-role \
      --role-name github-actions-ecr-push --query Role.Arn --output text)"
    ```
-3. Confirm `AWS_REGION` and `ECR_REPO` in the workflow's `env:` block match
-   your account.
-
-After that, each push builds and pushes `:latest` and `:<git-sha>` tags.
-
-### Auto-deploy to EC2 (optional)
-
-The workflow's second job (`deploy`) pulls the new image onto the EC2 box and
-restarts the container — driven remotely via **SSM**, so no inbound SSH is
-needed. It stays **skipped until you set the repo variable `EC2_INSTANCE_ID`**.
-
-One-time setup:
-
-1. Give the instance an IAM role for SSM + ECR-read, and attach it:
-   ```bash
-   EC2_INSTANCE_ID=i-0123... AWS_REGION=eu-west-2 ./deploy/ec2-instance-role.sh
-   ```
-   (If the SSM agent isn't running on Ubuntu:
-   `sudo snap install amazon-ssm-agent --classic && sudo snap start amazon-ssm-agent`.)
-2. Grant the CI role permission to call SSM — re-run the OIDC setup, which now
-   adds an `ssm-deploy` policy (optionally scoped to just this instance):
-   ```bash
-   EC2_INSTANCE_ID=i-0123... AWS_REGION=eu-west-2 ./deploy/aws-oidc-setup.sh
-   ```
-3. Turn the job on by setting the repo variable:
-   ```bash
-   gh variable set EC2_INSTANCE_ID --body i-0123...
-   ```
-
-Now every green build also runs, on the box:
-`docker login` → `docker pull …:latest` → `docker rm -f tr-archive` →
-`docker run … -p 80:80 …:latest`. The job polls the SSM command and fails if the
-on-box deploy fails, surfacing its output in the run log.
+3. Confirm `BUCKET` / `CF_DOMAIN` in the workflow's `env:` block are correct.
 
 ---
 
-## Deploy to AWS as a static site (lowest cost / no server)
+## Legacy: Docker / EC2
 
-Because it's a static site, hosting is a two-service story:
+The project began as an nginx container run on EC2; that path is **retired** in
+favour of static S3 + CloudFront hosting (above). The `Dockerfile` /
+`docker-compose.yml` remain useful for **running the site locally** (see “Run it
+locally with Docker”). The EC2 helper scripts (`deploy/ec2-*.sh`) and the
+`deploy/s3-setup.sh` public-read/CORS helper are only needed if you *don't* front
+the site with CloudFront.
 
-1. **S3** — one bucket for the site (`index.html`, `catalogue.json`) and,
-   optionally, a `scans/` prefix for the JPEGs.
-2. **CloudFront** — CDN + HTTPS in front of the bucket.
+To finish retiring EC2: terminate the instance, remove the `EC2_INSTANCE_ID` repo
+variable (`gh variable delete EC2_INSTANCE_ID`), and optionally delete the ECR
+repo (`aws ecr delete-repository --repository-name tr-archive --force`).
 
-```bash
-# regenerate the data, then sync the site
-python3 tools/build_catalogue.py data/tr.xml --out web/catalogue.json
-aws s3 sync web/ s3://YOUR-BUCKET/ --delete
-aws s3 sync scans/ s3://YOUR-BUCKET/scans/          # if/when you have scans
+---
 
-# put a CDN in front (once), then set IMAGE_BASE to its domain, e.g.
-#   var IMAGE_BASE = "https://dXXXX.cloudfront.net/scans/";
-```
+## Scaling & cost
 
-If search ever needs to scale to millions of records or server-side ranking,
-the natural next step is **Amazon OpenSearch Serverless** with a small
-**Lambda** API, but that is deliberately out of scope for this POC.
+Deployment is covered under **Hosting** and **Continuous deployment** above. If
+search ever needs to scale to millions of records or server-side ranking, the
+natural next step is **Amazon OpenSearch Serverless** with a small **Lambda**
+API — deliberately out of scope for this POC.
 
 ### Cost estimate
 
@@ -285,13 +211,18 @@ account's age.
 ## Project layout
 
 ```
-data/tr.xml               # source MODES XML export (2,136 objects)
-tools/build_catalogue.py  # XML -> catalogue.json compiler
-web/index.html            # the single-page app (search, facets, viewer)
-web/catalogue.json        # generated data (rebuilt in the Docker image)
-deploy/nginx.conf         # static-serving + gzip + caching config
-Dockerfile                # 2-stage: python build -> nginx
-docker-compose.yml        # `docker compose up` convenience
+data/tr.xml                     # source MODES XML export (2,136 objects)
+tools/build_catalogue.py        # XML -> catalogue.json compiler
+web/index.html                  # the single-page app (search, facets, viewer)
+web/admin.html                  # in-browser tool to regenerate catalogue.json
+web/catalogue.json              # generated data
+deploy/publish-site.sh          # push index/admin/catalogue to S3 + invalidate CF
+deploy/publish-catalogue.sh     # push just catalogue.json + invalidate CF (Mark)
+deploy/aws-oidc-setup.sh        # one-time IAM: OIDC role for S3 + CloudFront deploy
+deploy/s3-*.{sh,json}           # optional CORS/public-read (non-CloudFront setups)
+.github/workflows/deploy-site.yml  # CI: deploy app shell to S3 + CloudFront (OIDC)
+Dockerfile, docker-compose.yml  # local testing only (production is static)
+deploy/nginx.conf, deploy/ec2-* # legacy container/EC2 helpers
 ```
 
 ---

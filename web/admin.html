@@ -96,18 +96,20 @@ ol.pub li{margin:6px 0}
 
   <div class="step hidden" id="step4">
     <h2><span class="num">4</span> Publish it</h2>
-    <p>Upload the downloaded <code>catalogue.json</code> to the archive S3 bucket, replacing the old one:</p>
-    <pre class="mono">aws s3 cp catalogue.json s3://trarchive-766743414531-eu-north-1-an/catalogue.json</pre>
-    <p class="muted">…or drag it into that bucket in the AWS S3 console. The website picks up the
-       new data on the next page refresh.</p>
+    <p>Upload the downloaded <code>catalogue.json</code> to the archive S3 bucket and refresh
+       the CloudFront cache. The simplest way is one script from the project:</p>
+    <pre class="mono">./deploy/publish-catalogue.sh ~/Downloads/catalogue.json</pre>
+    <p class="muted">Prefer to do it by hand? Two commands:</p>
+    <pre class="mono">aws s3 cp catalogue.json s3://trarchive-766743414531-eu-north-1-an/catalogue.json
+aws cloudfront create-invalidation --distribution-id &lt;your-dist-id&gt; --paths /catalogue.json</pre>
+    <p class="muted">The website (served at <code>dmfmj7c4s21wr.cloudfront.net</code>) shows the new
+       data on the next refresh.</p>
     <ol class="pub">
       <li>Scanned images / PDFs go in the <em>same bucket</em>, named exactly as in MODES
-          (e.g. <code class="mono">Z-DDJ-1-51a.jpeg</code>) — the site builds each link from the filename.</li>
-      <li>If the site is fronted by CloudFront, invalidate <code>/catalogue.json</code> so the
-          refresh is immediate.</li>
-      <li class="warn">Note: loading <code>catalogue.json</code> from the bucket needs a CORS rule
-          allowing <code>GET</code> (see the project README). Alternatively, hand this file to
-          whoever manages the site to drop in beside <code>index.html</code>.</li>
+          (e.g. <code class="mono">Z-DDJ-1-51a.jpeg</code>) — the site builds each link from the filename.
+          They're new files, so they need no cache invalidation.</li>
+      <li>No repo / AWS CLI handy? Hand the downloaded <code>catalogue.json</code> to whoever
+          manages the site and they'll run the publish step.</li>
     </ol>
   </div>
 </main>
