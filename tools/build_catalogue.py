@@ -13,8 +13,8 @@ so they can be served from an S3 bucket / CloudFront distribution.
 """
 import argparse
 import json
+import os
 import re
-import sys
 import xml.etree.ElementTree as ET
 
 
@@ -116,6 +116,9 @@ def main():
         "summary": {k: summary[k] for k in ("count", "withImages", "totalImages")},
         "records": records,
     }
+    out_dir = os.path.dirname(args.out)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
 
