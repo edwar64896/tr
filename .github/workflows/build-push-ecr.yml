@@ -36,11 +36,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # --- TEMP DEBUG: remove once OIDC works ---
+      - name: Check role secret is present
+        env:
+          ROLE: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE" ]; then
+            echo "::error::AWS_ROLE_ARN secret is EMPTY or unset"
+          else
+            echo "AWS_ROLE_ARN is set (length ${#ROLE})"
+          fi
+
+      - name: Print OIDC token claims
+        run: |
+          TOKEN=$(curl -sH "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          P=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+')
+          case $((${#P} % 4)) in 2) P="$P==";; 3) P="$P=";; esac
+          echo "$P" | base64 -d 2>/dev/null | \
+            jq '{sub, aud, repository, repository_owner, ref, workflow_ref}'
+      # --- END TEMP DEBUG ---
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Log in to Amazon ECR
         id: ecr
