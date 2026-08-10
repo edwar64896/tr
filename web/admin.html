@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Update Catalogue — Talyllyn Railway Archive</title>
+<style>
+:root{
+  --paper:#e9ebe4; --surface:#f3f4ef; --surface-2:#dfe2d8;
+  --ink:#182420; --ink-soft:#42504a; --muted:#5c6b6e;
+  --line:#c9cdbf; --line-soft:#d7dacf;
+  --green:#215c3f; --green-bright:#2c7a53; --brass:#b07d33; --brass-soft:#f0e4cd;
+  --danger:#9c3b2e; --shadow:0 1px 2px rgba(24,36,32,.06),0 6px 24px rgba(24,36,32,.08);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#131917; --surface:#1a221f; --surface-2:#222b28;
+    --ink:#e8ede8; --ink-soft:#bcc7c1; --muted:#8fa19a;
+    --line:#2c3833; --line-soft:#26302c;
+    --green:#4fae7d; --green-bright:#63c493; --brass:#d9a95a; --brass-soft:#33301f;
+    --danger:#e08b7c; --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 24px rgba(0,0,0,.35);
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:600;margin:0}
+a{color:var(--green)}
+header{border-bottom:2px solid var(--ink);background:var(--surface);padding:16px clamp(16px,4vw,40px);display:flex;align-items:center;gap:14px}
+.crest{width:42px;height:42px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-family:Georgia,serif;font-weight:700;font-size:18px}
+header .sub{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+main{max-width:760px;margin:0 auto;padding:28px clamp(16px,4vw,40px) 80px}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:20px;box-shadow:var(--shadow)}
+.step h2{font-size:18px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.num{width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;display:inline-grid;place-items:center;font-size:14px;font-family:inherit;flex:0 0 auto}
+.step p{color:var(--ink-soft);margin:6px 0 0}
+.muted{color:var(--muted)}
+.drop{margin-top:16px;border:2px dashed var(--line);border-radius:10px;padding:34px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--green);background:var(--surface-2)}
+.drop strong{color:var(--green)}
+input[type=file]{display:none}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--green);color:#fff;border:0;border-radius:8px;
+  padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer}
+.btn:hover{background:var(--green-bright)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.secondary{background:transparent;color:var(--green);border:1px solid var(--line)}
+.hidden{display:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:16px}
+.stat{background:var(--paper);border:1px solid var(--line-soft);border-radius:9px;padding:12px 14px}
+.stat b{font-family:Georgia,serif;font-size:22px;display:block;line-height:1;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.msg{margin-top:14px;padding:11px 14px;border-radius:8px;font-size:13.5px}
+.msg.err{background:var(--brass-soft);color:var(--danger);border:1px solid var(--danger)}
+.msg.ok{background:var(--brass-soft);color:var(--ink-soft)}
+code{background:var(--surface-2);padding:1px 6px;border-radius:5px;font-size:.92em}
+pre{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:12.5px}
+ol.pub{margin:10px 0 0;padding-left:20px}
+ol.pub li{margin:6px 0}
+.warn{color:var(--brass);font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <div class="crest">TR</div>
+  <div>
+    <h1>Update the Catalogue</h1>
+    <div class="sub">Talyllyn Railway Archive · admin tool</div>
+  </div>
+</header>
+
+<main>
+  <div class="step">
+    <h2><span class="num">1</span> Choose the MODES export</h2>
+    <p>When new artifacts are added, export the collection from MODES as XML and drop the
+       file here. Everything runs in your browser — nothing is uploaded yet.</p>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".xml,text/xml,application/xml">
+      <div><strong>Click to choose</strong> or drag your <code>.xml</code> export here</div>
+      <div class="muted" id="fname" style="margin-top:8px">No file selected</div>
+    </label>
+    <div id="msg"></div>
+  </div>
+
+  <div class="step hidden" id="step2">
+    <h2><span class="num">2</span> Review</h2>
+    <p>Extracted from the export (folder paths stripped from every image/media filename):</p>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="step hidden" id="step3">
+    <h2><span class="num">3</span> Download the catalogue</h2>
+    <p>This produces <code>catalogue.json</code> — the single data file the website reads.</p>
+    <p style="margin-top:14px"><button class="btn" id="download">⬇ Download catalogue.json</button></p>
+  </div>
+
+  <div class="step hidden" id="step4">
+    <h2><span class="num">4</span> Publish it</h2>
+    <p>Upload the downloaded <code>catalogue.json</code> to the archive S3 bucket, replacing the old one:</p>
+    <pre class="mono">aws s3 cp catalogue.json s3://trarchive-766743414531-eu-north-1-an/catalogue.json</pre>
+    <p class="muted">…or drag it into that bucket in the AWS S3 console. The website picks up the
+       new data on the next page refresh.</p>
+    <ol class="pub">
+      <li>Scanned images / PDFs go in the <em>same bucket</em>, named exactly as in MODES
+          (e.g. <code class="mono">Z-DDJ-1-51a.jpeg</code>) — the site builds each link from the filename.</li>
+      <li>If the site is fronted by CloudFront, invalidate <code>/catalogue.json</code> so the
+          refresh is immediate.</li>
+      <li class="warn">Note: loading <code>catalogue.json</code> from the bucket needs a CORS rule
+          allowing <code>GET</code> (see the project README). Alternatively, hand this file to
+          whoever manages the site to drop in beside <code>index.html</code>.</li>
+    </ol>
+  </div>
+</main>
+
+<script>
+/* Mirror of tools/build_catalogue.py, in the browser. Keep the two in sync. */
+var LOCATION_FIXUPS = { "Dogellau Archive 2nd Deposit": "Dolgellau Archive 2nd Deposit" };
+
+function basename(p){ return p ? p.trim().split(/[\\/]/).pop() : ""; }
+function yearOf(raw){ if(!raw) return null; var m=raw.match(/(1[89]\d{2}|20\d{2})/); return m?parseInt(m[1],10):null; }
+
+// The export uses Windows-1252 code points as numeric references (e.g. &#150;
+// for an en-dash), which XML resolves to C1 control chars (U+0080-U+009F).
+// Remap that range to the intended Windows-1252 characters — matches
+// tools/build_catalogue.py so the browser build equals the CI build.
+var C1_MAP = {0x80:'€',0x82:'‚',0x83:'ƒ',0x84:'„',0x85:'…',
+  0x86:'†',0x87:'‡',0x88:'ˆ',0x89:'‰',0x8A:'Š',0x8B:'‹',
+  0x8C:'Œ',0x8E:'Ž',0x91:'‘',0x92:'’',0x93:'“',0x94:'”',
+  0x95:'•',0x96:'–',0x97:'—',0x98:'˜',0x99:'™',0x9A:'š',
+  0x9B:'›',0x9C:'œ',0x9E:'ž',0x9F:'Ÿ'};
+function clean(s){ return s ? s.replace(/[\u0080-\u009f]/g,function(c){return C1_MAP[c.charCodeAt(0)]||"";}) : s; }
+function txt(el,sel){ if(!el) return ""; var n=el.querySelector(sel); return n&&n.textContent?clean(n.textContent.trim()):""; }
+
+function convert(xmlText){
+  var doc = new DOMParser().parseFromString(xmlText, "application/xml");
+  if(doc.querySelector("parsererror")) throw new Error("That file isn't valid XML.");
+  var objs = doc.querySelectorAll("Interchange > Object");
+  if(!objs.length) throw new Error("No <Object> records found — is this a MODES export?");
+
+  var records = [];
+  objs.forEach(function(o){
+    var number = txt(o, "ObjectIdentity > Number");
+    if(!number) return;
+
+    var images = [];
+    o.querySelectorAll("Reproduction > Filename").forEach(function(f){
+      var fn = basename(f.textContent||""); if(fn) images.push(fn);
+    });
+    var media = [];
+    o.querySelectorAll('References[elementtype="multimedia"] > Filename').forEach(function(f){
+      var fn = basename(f.textContent||""); if(fn) media.push(fn);
+    });
+
+    // ObjectName simple-name / current location need attribute-scoped lookups.
+    var objName="", loc="";
+    o.querySelectorAll("Identification > ObjectName").forEach(function(n){
+      if(n.getAttribute("elementtype")==="simple name") objName = txt(n,"Keyword");
+    });
+    o.querySelectorAll("ObjectLocation").forEach(function(n){
+      if(n.getAttribute("elementtype")==="current location") loc = txt(n,"Location");
+    });
+    loc = LOCATION_FIXUPS[loc] || loc;
+
+    var dateBegin = txt(o, "Production > Date > DateBegin");
+    records.push({
+      id: number,
+      title: txt(o,"Identification > BriefDescription") || number,
+      objectName: objName,
+      classification: txt(o,"Identification > Classification > Keyword"),
+      location: loc,
+      dateBegin: dateBegin,
+      dateEnd: txt(o,"Production > Date > DateEnd"),
+      year: yearOf(dateBegin),
+      maker: txt(o,"Production > Organisation > OrganisationName"),
+      content: txt(o,"Content > SummaryText"),
+      description: txt(o,"Description > SummaryText"),
+      notes: txt(o,"Notes"),
+      recordType: txt(o,"RecordType"),
+      images: images,
+      media: media
+    });
+  });
+
+  records.sort(function(a,b){ return a.id<b.id?-1:a.id>b.id?1:0; });
+  var withImages = records.filter(function(r){return r.images.length;}).length;
+  var totalImages = records.reduce(function(n,r){return n+r.images.length;},0);
+  return {
+    fonds: "Z/DDJ — Talyllyn Railway Company Archive",
+    generated: "browser export",
+    summary: { count: records.length, withImages: withImages, totalImages: totalImages },
+    records: records
+  };
+}
+
+/* ---- wiring ---- */
+var payload = null;
+var fileEl=document.getElementById("file"), drop=document.getElementById("drop"),
+    msg=document.getElementById("msg"), fname=document.getElementById("fname");
+
+function show(id){ document.getElementById(id).classList.remove("hidden"); }
+function setMsg(t,cls){ msg.innerHTML = t ? '<div class="msg '+cls+'">'+t+'</div>' : ""; }
+
+function handle(file){
+  fname.textContent = file.name;
+  setMsg("Reading & converting…","ok");
+  var reader = new FileReader();
+  reader.onerror = function(){ setMsg("Could not read that file.","err"); };
+  reader.onload = function(){
+    try{
+      payload = convert(reader.result);
+      var s = payload.summary, nMedia = payload.records.reduce(function(n,r){return n+r.media.length;},0);
+      document.getElementById("stats").innerHTML =
+        stat(s.count.toLocaleString(),"Records") +
+        stat(new Set(payload.records.map(function(r){return r.classification;}).filter(Boolean)).size,"Classifications") +
+        stat(s.withImages,"Illustrated") +
+        stat(s.totalImages,"Scanned images") +
+        stat(nMedia,"Attached files");
+      setMsg("Converted <b>"+s.count.toLocaleString()+"</b> records successfully.","ok");
+      show("step2"); show("step3"); show("step4");
+    }catch(e){ payload=null; setMsg(esc(e.message),"err"); }
+  };
+  // MODES exports declare iso-8859-1 but are really Windows-1252 (smart quotes,
+  // en/em dashes, ellipses). Decode as such so those characters survive — this
+  // matches how tools/build_catalogue.py reads the same file.
+  reader.readAsText(file, "windows-1252");
+}
+function stat(v,l){ return '<div class="stat"><b>'+v+'</b><span>'+l+'</span></div>'; }
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+fileEl.addEventListener("change", function(){ if(fileEl.files[0]) handle(fileEl.files[0]); });
+["dragenter","dragover"].forEach(function(ev){ drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.add("over");}); });
+["dragleave","drop"].forEach(function(ev){ drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.remove("over");}); });
+drop.addEventListener("drop", function(e){ var f=e.dataTransfer.files[0]; if(f) handle(f); });
+
+document.getElementById("download").addEventListener("click", function(){
+  if(!payload) return;
+  var blob = new Blob([JSON.stringify(payload)], {type:"application/json"});
+  var url = URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download="catalogue.json"; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(function(){URL.revokeObjectURL(url);}, 2000);
+});
+</script>
+</body>
+</html>

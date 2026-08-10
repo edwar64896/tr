@@ -18,13 +18,30 @@ import re
 import xml.etree.ElementTree as ET
 
 
+# The export uses Windows-1252 code points as numeric character references
+# (e.g. &#150; for an en-dash), which XML resolves to C1 control chars
+# (U+0080-U+009F). Remap that range to the Windows-1252 characters the author
+# meant, so dashes, smart quotes and ellipses come through cleanly.
+_C1_MAP = {}
+for _b in range(0x80, 0xA0):
+    try:
+        _C1_MAP[chr(_b)] = bytes([_b]).decode("cp1252")
+    except UnicodeDecodeError:
+        pass  # 0x81/0x8D/0x8F/0x90/0x9D are undefined in cp1252
+_C1_TABLE = str.maketrans(_C1_MAP)
+
+
+def clean(s):
+    return s.translate(_C1_TABLE) if s else s
+
+
 def t(el, path):
-    """Return trimmed text at an ElementPath, or '' if missing/empty."""
+    """Return trimmed, C1-cleaned text at an ElementPath, or '' if empty."""
     if el is None:
         return ""
     n = el.find(path)
     if n is not None and n.text:
-        return n.text.strip()
+        return clean(n.text.strip())
     return ""
 
 
@@ -43,19 +60,47 @@ def year_of(raw):
     return int(m.group(1)) if m else None
 
 
+def load_root(src):
+    """Parse the MODES export.
+
+    The file declares iso-8859-1 but is really Windows-1252 (it comes from a
+    Windows/OneDrive workflow, so it carries smart quotes, en/em dashes and
+    ellipses in the 0x80-0x9F range that iso-8859-1 lacks). Browsers already
+    treat iso-8859-1 as Windows-1252, so we decode the same way here to keep
+    the Python build and the in-browser admin tool byte-for-byte consistent.
+    """
+    raw = open(src, "rb").read()
+    text = raw.decode("cp1252", errors="replace")
+    # ET refuses a unicode string that still declares a non-UTF encoding, so
+    # normalise the declaration and hand it UTF-8 bytes.
+    text = re.sub(r'(<\?xml[^>]*encoding=")[^"]*(")', r"\1utf-8\2", text, count=1)
+    return ET.fromstring(text.encode("utf-8"))
+
+
 def build(src):
-    root = ET.parse(src).getroot()
+    root = load_root(src)
     records = []
     for o in root.findall("Object"):
         number = t(o, "ObjectIdentity/Number")
         if not number:
             continue
 
+        # Scanned images (Reproduction) and other attached media such as PDFs
+        # (References@multimedia). Both are reduced to a bare filename — the
+        # original Windows/OneDrive folder path is stripped — so each maps
+        # directly to a flat key in the S3 bucket.
         images = []
         for r in o.findall("Reproduction"):
             fn = image_basename((r.findtext("Filename") or "").strip())
             if fn:
                 images.append(fn)
+
+        media = []
+        for r in o.findall("References"):
+            if r.get("elementtype") == "multimedia":
+                fn = image_basename((r.findtext("Filename") or "").strip())
+                if fn:
+                    media.append(fn)
 
         date_begin = t(o, "Production/Date/DateBegin")
         rec = {
@@ -73,6 +118,7 @@ def build(src):
             "notes": t(o, "Notes"),
             "recordType": t(o, "RecordType"),
             "images": images,
+            "media": media,
         }
         records.append(rec)
 

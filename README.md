@@ -27,16 +27,45 @@ no database, and no running costs to speak of.**
   notes, and a gallery of its scanned images.
 - **Light / dark themes**, responsive down to mobile.
 
-### About the images
-The XML references image files by their original OneDrive paths (e.g.
-`Z-DDJ-1-51a.jpeg`); the JPEGs themselves are **not** in the export. The app
-reduces each to a bare filename and builds image URLs from a single
-`IMAGE_BASE` setting (top of `web/index.html`):
+### Images & attached media (served from S3)
+The XML references files by their original OneDrive paths; the build **strips the
+folder** from every scanned image (`Reproduction`) and attached file such as a
+PDF (`References` multimedia), leaving a bare filename (e.g. `Z-DDJ-1-51a.jpeg`)
+that maps directly to a flat key in the S3 bucket. The files themselves are not
+in the export — they live in the bucket:
 
-- left empty → the detail panel shows labelled **placeholders** naming each scan
-  (what you see in the demo);
-- set to `"/scans/"` → served from the container (drop JPEGs into `./scans`);
-- set to a bucket URL → served from **S3 / CloudFront**.
+```
+s3://trarchive-766743414531-eu-north-1-an
+```
+
+The app builds each URL as `IMAGE_BASE + <url-encoded filename>` (filenames with
+spaces/parentheses are handled). `IMAGE_BASE` is set at the top of
+`web/index.html` and currently points at that bucket's HTTPS endpoint. For the
+images to load in the browser the objects must be **publicly readable**, or the
+bucket fronted by **CloudFront** (then set `IMAGE_BASE` to the CloudFront domain).
+Set `IMAGE_BASE = ""` to fall back to labelled placeholders.
+
+### Updating the catalogue (for Mark) — `admin.html`
+When new artifacts are added, re-export from MODES and use the **Update the
+catalogue** page (linked in the site header, or open `/admin.html`). It runs
+entirely in the browser: choose the `.xml`, it converts it to `catalogue.json`
+(identical logic to `tools/build_catalogue.py` — verified byte-for-byte), shows a
+summary, and downloads the file. Then publish it:
+
+```bash
+aws s3 cp catalogue.json s3://trarchive-766743414531-eu-north-1-an/catalogue.json
+```
+
+For the site to load `catalogue.json` straight from the bucket, set
+`CATALOGUE_URL` (top of `web/index.html`) to that object's URL **and** add a CORS
+rule to the bucket allowing `GET`:
+
+```json
+[{ "AllowedMethods": ["GET"], "AllowedOrigins": ["*"], "AllowedHeaders": ["*"] }]
+```
+
+Otherwise leave `CATALOGUE_URL = ""` and hand the file to whoever manages the
+site to drop beside `index.html` (or commit `data/tr.xml` and let CI rebuild).
 
 ---
 
