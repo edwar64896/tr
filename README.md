@@ -56,16 +56,27 @@ summary, and downloads the file. Then publish it:
 aws s3 cp catalogue.json s3://trarchive-766743414531-eu-north-1-an/catalogue.json
 ```
 
-For the site to load `catalogue.json` straight from the bucket, set
-`CATALOGUE_URL` (top of `web/index.html`) to that object's URL **and** add a CORS
-rule to the bucket allowing `GET`:
+`CATALOGUE_URL` (top of `web/index.html`) is already set to that object's URL, so
+the site loads the data straight from the bucket — Mark's uploads go live on the
+next refresh, no rebuild. (The inline demo build ignores it; the offline bundle
+still works.) To turn that off, set `CATALOGUE_URL = ""` and the copy served
+beside `index.html` is used instead.
 
-```json
-[{ "AllowedMethods": ["GET"], "AllowedOrigins": ["*"], "AllowedHeaders": ["*"] }]
+### One-time bucket setup
+
+Run once (with the AWS CLI configured). It applies CORS (so the fetch works),
+uploads the current `catalogue.json`, and — with `ALLOW_PUBLIC=yes` — makes the
+objects publicly readable so images/PDFs load:
+
+```bash
+ALLOW_PUBLIC=yes AWS_REGION=eu-north-1 ./deploy/s3-setup.sh
 ```
 
-Otherwise leave `CATALOGUE_URL = ""` and hand the file to whoever manages the
-site to drop beside `index.html` (or commit `data/tr.xml` and let CI rebuild).
+It uses `deploy/s3-cors.json` and `deploy/s3-bucket-policy.json`. Public-read is
+the simplest option for a POC; the private alternative is CloudFront + Origin
+Access Control, then point `IMAGE_BASE`/`CATALOGUE_URL` at the CloudFront domain.
+Leave off `ALLOW_PUBLIC` to apply only CORS + upload (e.g. if you'll use
+CloudFront).
 
 ---
 
