@@ -76,7 +76,10 @@ else
 fi
 
 # 4. Least-privilege ECR push policy (scoped to the one repo; the auth-token
-#    action must be Resource:* per the ECR API).
+#    action must be Resource:* per the ECR API). The read actions
+#    (BatchCheckLayerAvailability, GetDownloadUrlForLayer, BatchGetImage) are
+#    required too: buildx HEADs existing blobs to skip re-uploading unchanged
+#    layers, so without them the *second* push 403s even though the first works.
 cat > "$TMP/ecr.json" <<JSON
 {
   "Version": "2012-10-17",
@@ -85,11 +88,12 @@ cat > "$TMP/ecr.json" <<JSON
     { "Effect": "Allow",
       "Action": [
         "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
         "ecr:InitiateLayerUpload",
         "ecr:UploadLayerPart",
         "ecr:CompleteLayerUpload",
-        "ecr:PutImage",
-        "ecr:BatchGetImage"
+        "ecr:PutImage"
       ],
       "Resource": "arn:aws:ecr:${AWS_REGION}:${ACCOUNT_ID}:repository/${ECR_REPO}" }
   ]
