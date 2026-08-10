@@ -1,0 +1,18 @@
+{
+  "_comment": "Template for pasting into the S3 console. Replace <ACCOUNT_ID> and <DISTRIBUTION_ID>. deploy/cloudfront-oac.sh applies this automatically with the values filled in.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowCloudFrontOAC",
+      "Effect": "Allow",
+      "Principal": { "Service": "cloudfront.amazonaws.com" },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::trarchive-766743414531-eu-north-1-an/*",
+      "Condition": {
+        "StringEquals": {
+          "AWS:SourceArn": "arn:aws:cloudfront::<ACCOUNT_ID>:distribution/<DISTRIBUTION_ID>"
+        }
+      }
+    }
+  ]
+}

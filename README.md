@@ -76,6 +76,25 @@ That uploads it and invalidates `/catalogue.json`, so the change is live on the
 next refresh — **no server, no rebuild**. (Both publish scripts look up the
 CloudFront distribution ID from its domain automatically.)
 
+### Locking the bucket to CloudFront (OAC)
+
+With CloudFront in front, keep the bucket **private** and let only the
+distribution read it via Origin Access Control:
+
+1. In the CloudFront console, set the S3 origin's **Origin access** to *Origin
+   access control settings*, create/select a control, and save.
+2. Apply the matching bucket policy and turn Block Public Access back on:
+   ```bash
+   ./deploy/cloudfront-oac.sh
+   ```
+3. Set the distribution's **Default Root Object** to `index.html` (else a bare
+   `/` request returns AccessDenied).
+
+`AccessDenied` on the root usually means one of: no Default Root Object, the
+site files aren't uploaded yet (`deploy/publish-site.sh`), or the OAC policy /
+origin isn't set. Test a specific path (`/index.html`, `/catalogue.json`) to tell
+which.
+
 ### CORS / public-read (only if not fronting the site with CloudFront)
 
 If instead you serve the site from somewhere else and only pull assets from S3
