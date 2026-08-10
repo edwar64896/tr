@@ -76,7 +76,60 @@ cd web && python3 -m http.server 8080
 
 ---
 
-## Deploy to AWS (when you're ready)
+## Deploy to EC2 for a quick HTTP test
+
+Run the exact container on an EC2 box and reach it at `http://<public-ip>` — no
+domain, no certificate, no Caddy. (nginx inside the image already serves the
+site; Caddy is only worth adding later, for automatic HTTPS, and only once a DNS
+name points at the instance.)
+
+**1. Launch an instance.** Amazon Linux 2023, `t3.small` is ample. In its
+security group allow inbound **TCP 80** (from your own IP for a private test, or
+`0.0.0.0/0` to share the link). Paste `deploy/ec2-user-data.sh` into
+*Advanced details → User data* so Docker is installed at first boot.
+
+**2. Get the image onto the box** — pick one:
+
+*Option A — copy it directly, no registry:*
+```bash
+# on your machine
+docker build -t tr-archive:poc .
+docker save tr-archive:poc | gzip | \
+  ssh -i key.pem ec2-user@<public-ip> 'gunzip | docker load'
+```
+
+*Option B — via ECR* (better if you'll iterate; the instance needs an IAM role
+with ECR read access):
+```bash
+ACCT=<acct-id>; REGION=<region>
+aws ecr create-repository --repository-name tr-archive --region $REGION
+aws ecr get-login-password --region $REGION | \
+  docker login --username AWS --password-stdin $ACCT.dkr.ecr.$REGION.amazonaws.com
+docker build -t $ACCT.dkr.ecr.$REGION.amazonaws.com/tr-archive:poc .
+docker push  $ACCT.dkr.ecr.$REGION.amazonaws.com/tr-archive:poc
+# then on the EC2 box: docker pull <same-image-name>
+```
+
+**3. Run it on port 80** (on the EC2 box):
+```bash
+docker run -d --name tr-archive --restart unless-stopped -p 80:80 tr-archive:poc
+```
+
+**4. Open** `http://<public-ip>`. The catalogue loads; image references show as
+placeholders until you add scans.
+
+**Adding the 50 GB of scans later:** don't bake them into the image. Attach an
+EBS volume (or mount an S3 path), then run with
+`-v /data/scans:/usr/share/nginx/html/scans:ro` and set
+`var IMAGE_BASE = "/scans/";` in `web/index.html`.
+
+**Adding HTTPS later:** point a DNS name at the instance and drop **Caddy** in
+front (one-line Caddyfile, automatic Let's Encrypt certs), or put **CloudFront**
+in front for a free `https://….cloudfront.net` URL with no domain.
+
+---
+
+## Deploy to AWS as a static site (lowest cost / no server)
 
 Because it's a static site, hosting is a two-service story:
 
