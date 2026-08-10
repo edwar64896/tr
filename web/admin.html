@@ -95,22 +95,27 @@ ol.pub li{margin:6px 0}
   </div>
 
   <div class="step hidden" id="step4">
-    <h2><span class="num">4</span> Publish it</h2>
-    <p>Upload the downloaded <code>catalogue.json</code> to the archive S3 bucket and refresh
-       the CloudFront cache. The simplest way is one script from the project:</p>
-    <pre class="mono">./deploy/publish-catalogue.sh ~/Downloads/catalogue.json</pre>
-    <p class="muted">Prefer to do it by hand? Two commands:</p>
-    <pre class="mono">aws s3 cp catalogue.json s3://trarchive-766743414531-eu-north-1-an/catalogue.json
-aws cloudfront create-invalidation --distribution-id &lt;your-dist-id&gt; --paths /catalogue.json</pre>
-    <p class="muted">The website (served at <code>dmfmj7c4s21wr.cloudfront.net</code>) shows the new
-       data on the next refresh.</p>
+    <h2><span class="num">4</span> Publish it (all in the AWS website)</h2>
+    <p>Three quick steps in your web browser — no software to install:</p>
     <ol class="pub">
-      <li>Scanned images / PDFs go in the <em>same bucket</em>, named exactly as in MODES
-          (e.g. <code class="mono">Z-DDJ-1-51a.jpeg</code>) — the site builds each link from the filename.
-          They're new files, so they need no cache invalidation.</li>
-      <li>No repo / AWS CLI handy? Hand the downloaded <code>catalogue.json</code> to whoever
-          manages the site and they'll run the publish step.</li>
+      <li><b>Upload.</b> Open the <b>S3</b> console → bucket
+          <code class="mono">trarchive-766743414531-eu-north-1-an</code> →
+          <b>Upload</b> → add the <code>catalogue.json</code> you just downloaded →
+          <b>Upload</b>. (Say yes to replacing the old one.)</li>
+      <li><b>Clear the cache.</b> Open the <b>CloudFront</b> console → your distribution →
+          <b>Invalidations</b> tab → <b>Create invalidation</b> → type
+          <code class="mono">/catalogue.json</code> → <b>Create invalidation</b>.
+          Wait until it says <em>Completed</em> (about a minute).</li>
+      <li><b>Check.</b> Open
+          <a href="https://dmfmj7c4s21wr.cloudfront.net/" target="_blank" rel="noopener">the website</a>
+          and refresh — the new records are live.</li>
     </ol>
+    <p class="muted" style="margin-top:14px">Adding scans or PDFs? Upload them to the
+       <em>same bucket</em> with their exact MODES filenames
+       (e.g. <code class="mono">Z-DDJ-1-51a.jpeg</code>, <code class="mono">z-ddj-1-27.pdf</code>).
+       They're new files, so they don't need the cache-clearing step.</p>
+    <p class="muted">On a machine with the AWS CLI instead? One command does it all:
+       <code class="mono">./deploy/publish-catalogue.sh ~/Downloads/catalogue.json</code></p>
   </div>
 </main>
 
