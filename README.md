@@ -169,7 +169,9 @@ runtime really offers `crypto.createHmac`), attaches it, and publishes
 You need a minting tool exactly twice: now, to bootstrap — `/admin.html` is
 behind the gate, so there's a chicken-and-egg to break — and after a key
 rotation. `mint-token.sh` reads the key from SSM; `tools/mint.js` takes it
-directly and needs nothing but Node, which is what the console route uses. Open
+directly and needs only Node; `tools/mint.html` does the same in a browser with
+nothing installed at all, which is the one to hand to a non-technical operator —
+it is also the way back in if an administrator pass lapses. Open
 the link it prints; from then on issue passes from the **Access passes** panel
 on `/admin.html`.
 
@@ -410,6 +412,7 @@ deploy/INSTALL-AUTH.md          # console walkthrough for turning the gate on
 tools/test_auth.js              # tests for the gate (node tools/test_auth.js)
 tools/serve-local.js            # run the site locally with the gate in front
 tools/mint.js                   # generate the key / mint a pass, no AWS needed
+tools/mint.html                 # same, in a browser — no Node, no install
 deploy/aws-oidc-setup.sh        # one-time IAM: OIDC role for S3 + CloudFront deploy
 deploy/s3-*.{sh,json}           # optional CORS/public-read (non-CloudFront setups)
 .github/workflows/deploy-site.yml  # CI: deploy app shell to S3 + CloudFront (OIDC)

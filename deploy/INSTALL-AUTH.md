@@ -28,6 +28,11 @@ node tools/mint.js --new-key
 
 It prints a long key and writes `deploy/edge-auth.ready.js`.
 
+No Node? Make up a long random key yourself (a password manager's generator is
+ideal), open `deploy/edge-auth.js` in a text editor, and replace
+`REPLACE_AT_DEPLOY` with it — that edited file is what you paste in step 3.
+Use `tools/mint.html` in place of `tools/mint.js` for step 2.
+
 > **Save the key in a password manager now.** It is the single secret behind
 > every pass. It is not stored anywhere else — not in this repo, not in AWS in
 > a form you can read back. Lose it and you can still turn the gate off, but
@@ -221,6 +226,25 @@ catalogue *and* issue passes of their own.
 Nothing else changes. Scans and `catalogue.json` still go up through GoodSync
 exactly as before, and new uploads are covered by the gate automatically.
 
+## If an administrator pass expires
+
+An administrator pass lasts a year. When it lapses, that person is locked out of
+the archive *and* of `/admin.html`, so they can't issue themselves a
+replacement — that's deliberate, or an administrator would never really expire.
+Readers are unaffected; their passes are independent.
+
+Two ways back in:
+
+- **Another administrator** whose pass is still current issues one from
+  `/admin.html`. Ten seconds.
+- **Open `tools/mint.html`** in a browser (just double-click the file — it needs
+  no installation and no internet), paste the signing key, and mint a new
+  administrator pass. The key is readable in the CloudFront console: Functions
+  → `tr-archive-auth` → **Build**, on the `var SECRET` line.
+
+To avoid it entirely, issue yourself a fresh administrator pass from
+`/admin.html` any time before it lapses — the new one simply replaces the old.
+
 ## If a pass needs cancelling
 
 Passes expire on their own, which is the intended mechanism — a two-week pass
@@ -229,11 +253,14 @@ is gone in two weeks whatever happens.
 There's no way to cancel *one* pass. To cancel **all** of them (say a link was
 forwarded somewhere it shouldn't have been):
 
-1. `node tools/mint.js --new-key` — a new key, and a new
-   `deploy/edge-auth.ready.js`.
-2. Mint yourself a fresh administrator pass with the new key (step 2).
-3. CloudFront → Functions → `tr-archive-auth` → **Build** → paste the new code
-   → **Save changes** → **Test** → **Publish**.
+1. Make up a new key — any long random string of letters and numbers will do;
+   a password manager's generator is ideal. (`node tools/mint.js --new-key`
+   does it for you if you have Node.)
+2. CloudFront → Functions → `tr-archive-auth` → **Build**, replace the value on
+   the `var SECRET` line with the new key → **Save changes**.
+3. Mint yourself a fresh administrator pass against the new key with
+   `tools/mint.html` — **before** you publish, or you'll lock yourself out.
+4. Back on the function: **Test**, then **Publish**.
 
 Every outstanding pass stops working, including your old one — which is why you
 mint the new one first. The function stays attached; you don't redo step 7.

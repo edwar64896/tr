@@ -265,5 +265,50 @@ section("console test events (INSTALL-AUTH.md step 4)");
     handler(ev({ tr_pass: { value: 'forged', attributes: tok } })).statusCode === 302);
 }
 
+// ------------------------------------ the no-install path (tools/mint.html)
+/* The client operates this from a browser and may not have Node at all, so
+   tools/mint.html mints with the browser's own Web Crypto. It is the recovery
+   path used exactly when things have gone wrong, so it must agree with the
+   edge to the byte — run its real script here (Node 22 has the same Web Crypto)
+   and check the edge accepts what it makes. */
+section('tools/mint.html — minting with no install');
+{
+  const html = fs.readFileSync(path.join(__dirname, 'mint.html'), 'utf8');
+
+  ok('the page makes no network requests', !/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|src=["']https?:/.test(html));
+  ok('nothing is loaded from a CDN', !/<(script|link)[^>]+(src|href)=["']https?:/i.test(html));
+
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const c3 = { crypto: globalThis.crypto, TextEncoder, Date: MockDate, Math, String, Array, Uint8Array, Error, console };
+  vm.createContext(c3);
+  vm.runInContext(script + '\nthis.mint = mintToken;', c3);
+
+  return c3.mint(SECRET, 'client@example.org', '1').then(async (admin) => {
+    const c = verify(admin.token);
+    ok('an admin pass it mints is valid at the edge', !!c && !c.expired && c.role === 'a');
+    ok('and opens the admin page',
+      handler(req('/admin.html', { cookie: admin.token })).uri === '/admin.html');
+
+    for (const [type, role] of [['2', 'p'], ['3', 'p']]) {
+      const r = await c3.mint(SECRET, 'reader@example.org', type);
+      ok('a type ' + type + ' pass carries role ' + role, verify(r.token).role === role);
+    }
+
+    const wrong = await c3.mint('not-the-signing-key', 'eve@example.org', '1');
+    ok('a pass minted with the wrong key is refused', verify(wrong.token) === null);
+
+    const sneaky = await c3.mint(SECRET, 'a~b@example.org', '3');
+    ok('it strips the separator like the edge does', verify(sneaky.token).sub === 'ab@example.org');
+
+    let bad = false;
+    try { await c3.mint(SECRET, 'x@y.z', '9'); } catch (e) { bad = true; }
+    ok('an unknown type is refused', bad);
+
+    finish();
+  });
+}
+
+function finish() {
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
+}
