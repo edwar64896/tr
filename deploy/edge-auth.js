@@ -154,6 +154,14 @@ function handler(event) {
   var claims = verify(req.cookies[COOKIE] ? req.cookies[COOKIE].value : '');
 
   if (uri === '/mint') return mint(req, claims);
+  // The cookie is HttpOnly, so /admin.html cannot read its own expiry. This
+  // lets it warn an administrator before their pass lapses — the one failure
+  // with no way back through the browser.
+  if (uri === '/whoami') {
+    return claims && !claims.expired
+      ? json(200, { sub: claims.sub, role: claims.role, exp: claims.exp })
+      : json(401, { error: 'no_pass' });
+  }
   if (!claims) return deny(uri, '');
   if (claims.expired) return deny(uri, 'expired');
   if (uri === '/admin.html' && claims.role !== 'a') return deny(uri, 'admin');

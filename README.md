@@ -108,6 +108,10 @@ all-CloudFront setup above.
 
 ## Access control — passes
 
+> **Running the archive day to day?** [`docs/ACCESS-PASSES.md`](docs/ACCESS-PASSES.md)
+> is the operator's reference: issuing passes, the signing key, what happens when
+> an administrator pass expires, and how to cut off every pass at once.
+
 The archive is private. A visitor needs a **pass**: a signed, self-expiring
 token that the archivist issues and emails as a link. Opening the link drops a
 cookie and lets them in; when the pass runs out they're shown the gate page
@@ -193,6 +197,14 @@ Open `/admin.html`, enter who the pass is for, pick a duration, press **Create
 pass**. You get a link, a copy button, and a pre-written email. Minting happens
 at the edge (`/mint`), authenticated by your own admin cookie — the page only
 ever asks for a link.
+
+### Renewal
+
+An administrator whose pass lapses loses `/admin.html` and can't issue
+themselves a replacement. `/admin.html` therefore asks `/whoami` at the edge for
+its own expiry — the cookie is `HttpOnly`, so the page can't read it — and shows
+a **Renew for another year** banner 45 days out. One click mints a fresh
+administrator pass and signs them back in.
 
 ### Revoking
 
@@ -409,6 +421,7 @@ deploy/edge-auth.js             # CloudFront Function: the access-pass gate
 deploy/publish-auth.sh          # install/update/rotate/detach the gate
 deploy/mint-token.sh            # mint a pass from the CLI (bootstrap + break-glass)
 deploy/INSTALL-AUTH.md          # console walkthrough for turning the gate on
+docs/ACCESS-PASSES.md           # operator reference: passes, the key, expiry, revocation
 tools/test_auth.js              # tests for the gate (node tools/test_auth.js)
 tools/serve-local.js            # run the site locally with the gate in front
 tools/mint.js                   # generate the key / mint a pass, no AWS needed

@@ -304,6 +304,28 @@ section('tools/mint.html — minting with no install');
     try { await c3.mint(SECRET, 'x@y.z', '9'); } catch (e) { bad = true; }
     ok('an unknown type is refused', bad);
 
+    section('/whoami — the renewal nudge');
+    {
+      const adminTok = issue('mark@example.org', '1').token;
+      const readerTok = issue('jane@example.org', '2').token;
+
+      const me = JSON.parse(handler(req('/whoami', { cookie: adminTok })).body.data);
+      ok('reports the caller back to the page', me.sub === 'mark@example.org' && me.role === 'a');
+      ok('reports an expiry the page can count down from', me.exp === verify(adminTok).exp);
+      ok('a reader gets their own details, not an admin\'s',
+        JSON.parse(handler(req('/whoami', { cookie: readerTok })).body.data).role === 'p');
+      ok('no pass gets 401, not a redirect', handler(req('/whoami')).statusCode === 401);
+      ok('it leaks nothing without a valid pass',
+        !JSON.stringify(handler(req('/whoami')).body.data).includes('mark@'));
+
+      clock.now += 400 * 86400 * 1000;
+      ok('an expired pass gets 401 too', handler(req('/whoami', { cookie: adminTok })).statusCode === 401);
+      clock.now -= 400 * 86400 * 1000;
+
+      ok('it never returns the signing key',
+        !JSON.stringify(handler(req('/whoami', { cookie: adminTok }))).includes(SECRET));
+    }
+
     finish();
   });
 }

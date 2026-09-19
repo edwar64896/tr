@@ -70,6 +70,11 @@ ol.pub li{margin:6px 0}
   background:var(--paper);color:var(--ink);font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
 a.btn{text-decoration:none}
+#renewBanner .msg{margin:0 0 20px;padding:14px 16px;border:1px solid var(--brass);
+  background:var(--brass-soft);color:var(--ink-soft);display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+#renewBanner .msg b{color:var(--brass)}
+#renewBanner .btn{margin-top:0;padding:8px 14px}
+#renewBanner .grow{flex:1 1 280px;min-width:0}
 </style>
 </head>
 <body>
@@ -82,6 +87,8 @@ a.btn{text-decoration:none}
 </header>
 
 <main>
+  <div id="renewBanner" class="hidden"></div>
+
   <div class="step">
     <h2><span class="num">1</span> Choose the MODES export</h2>
     <p>When new artifacts are added, export the collection from MODES as XML and drop the
@@ -353,6 +360,35 @@ document.getElementById("download").addEventListener("click", function(){
       .catch(function(e){ say(e.message,"err"); })
       .then(function(){ btn.disabled=false; });
   });
+
+  /* The pass cookie is HttpOnly, so this page can't read when its own pass
+     runs out. /whoami at the edge reports it. An administrator whose pass
+     lapses is locked out of this page and can't issue a replacement, so the
+     warning starts well before that happens. */
+  var WARN_DAYS = 45;
+  fetch("/whoami").then(function(r){ return r.ok ? r.json() : null; }).then(function(me){
+    if(!me || me.role !== "a") return;
+    var days = Math.ceil((me.exp*1000 - Date.now())/86400000);
+    if(days > WARN_DAYS) return;
+    var when = new Date(me.exp*1000).toLocaleDateString(undefined,{day:"numeric",month:"long",year:"numeric"});
+    var b = document.getElementById("renewBanner");
+    b.innerHTML = '<div class="msg"><div class="grow"><b>Your administrator pass expires '
+      + (days <= 0 ? 'today' : 'in ' + days + ' day' + (days===1?'':'s'))
+      + '</b> (' + when + '). Once it lapses you lose access to this page and can\'t issue '
+      + 'yourself a replacement \u2014 you would need the signing key. Renewing takes a moment.'
+      + '</div><button class="btn" id="renewNow">Renew for another year</button></div>';
+    b.classList.remove("hidden");
+    document.getElementById("renewNow").addEventListener("click", function(){
+      var btn = this; btn.disabled = true; btn.textContent = "Renewing\u2026";
+      fetch("/mint?type=1&sub=" + encodeURIComponent(me.sub))
+        .then(function(r){ if(!r.ok) throw new Error("refused ("+r.status+")"); return r.json(); })
+        .then(function(d){ location.href = d.link; })   // redeeming replaces the cookie
+        .catch(function(e){
+          btn.disabled = false; btn.textContent = "Renew for another year";
+          say("Could not renew: " + e.message + ". Use tools/mint.html with the signing key instead.","err");
+        });
+    });
+  }).catch(function(){ /* gate not installed yet, or offline — no banner */ });
 
   copyBtn.addEventListener("click", function(){
     linkEl.select(); linkEl.setSelectionRange(0,99999);
