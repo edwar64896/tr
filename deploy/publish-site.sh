@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Publish the whole static site (index.html, admin.html, catalogue.json) to S3
+# Publish the whole static site (index.html, admin.html, gate.html, catalogue.json)
+# to S3
 # and invalidate CloudFront. This is how the site is deployed once EC2 is
 # retired — no server, no container in production.
 #
@@ -21,6 +22,7 @@ WEB="$DIR/../web"
 echo "Uploading site files to s3://$BUCKET ..."
 aws s3 cp "$WEB/index.html"     "s3://$BUCKET/index.html"     --content-type "text/html"        --cache-control "no-cache"
 aws s3 cp "$WEB/admin.html"     "s3://$BUCKET/admin.html"     --content-type "text/html"        --cache-control "no-cache"
+aws s3 cp "$WEB/gate.html"      "s3://$BUCKET/gate.html"      --content-type "text/html"        --cache-control "no-cache"
 aws s3 cp "$WEB/catalogue.json" "s3://$BUCKET/catalogue.json" --content-type "application/json"  --cache-control "no-cache"
 
 DIST_ID="$(aws cloudfront list-distributions \
@@ -28,7 +30,7 @@ DIST_ID="$(aws cloudfront list-distributions \
 if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
   echo "Invalidating on $DIST_ID..."
   aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
-    --paths /index.html /admin.html /catalogue.json >/dev/null
+    --paths /index.html /admin.html /gate.html /catalogue.json >/dev/null
 fi
 
 echo "Done. Site: https://$CF_DOMAIN/"

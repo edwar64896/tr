@@ -26,6 +26,8 @@ no database, and no running costs to speak of.**
 - **Detail panel** for every item showing the full catalogue record, curator's
   notes, and a gallery of its scanned images.
 - **Light / dark themes**, responsive down to mobile.
+- **Private by invitation** — time-limited access passes issued by the
+  archivist, enforced at the CDN edge (see [Access control](#access-control--passes)).
 
 ## Hosting: S3 + CloudFront (no server)
 
@@ -101,6 +103,109 @@ If instead you serve the site from somewhere else and only pull assets from S3
 directly, run `./deploy/s3-setup.sh` (optionally `ALLOW_PUBLIC=yes`) to apply
 `deploy/s3-cors.json` and `deploy/s3-bucket-policy.json`. Not needed for the
 all-CloudFront setup above.
+
+---
+
+## Access control — passes
+
+The archive is private. A visitor needs a **pass**: a signed, self-expiring
+token that the archivist issues and emails as a link. Opening the link drops a
+cookie and lets them in; when the pass runs out they're shown the gate page
+again. There's nothing for them to remember and no account to create.
+
+| Type | Who | Lasts | Can reach `/admin.html` |
+|---|---|---|---|
+| 1 | administrator | 1 year | yes |
+| 2 | reader | 14 days | no |
+| 3 | reader | 24 hours | no |
+
+### Why it can't live in the page
+
+The site is static — S3 behind CloudFront, no backend — so a gate written into
+`index.html` would be decoration. `catalogue.json` and every scan are plain
+URLs, and anyone could skip the page entirely:
+
+```bash
+curl https://dmfmj7c4s21wr.cloudfront.net/catalogue.json
+```
+
+So the check runs in **`deploy/edge-auth.js`, a CloudFront Function on
+viewer-request**, attached to the default cache behaviour. It sees every
+request — including cache hits — before CloudFront reaches S3. No server, no
+database, and at this traffic it stays inside the free tier.
+
+### The token
+
+```
+<who>~<role>~<expiry>~<key-version>.<hmac-sha256-hex>
+```
+
+Signed with a key held in **SSM Parameter Store** (`/trarchive/auth-secret`,
+SecureString) and substituted into the function at deploy time — it is never
+committed and never reaches a browser. The token carries its own expiry, so
+nothing is stored anywhere: there is no session table, and expired passes need
+no cleaning up.
+
+### Setting it up
+
+```bash
+./deploy/publish-auth.sh                              # install + attach the gate
+./deploy/mint-token.sh --type 1 --for you@example.org # your own admin pass
+```
+
+`publish-auth.sh` generates the signing key on first run, uploads the function,
+**tests it in CloudFront's sandbox before publishing** (which is what proves the
+runtime really offers `crypto.createHmac`), attaches it, and publishes
+`gate.html`. Changes take about five minutes to reach every edge.
+
+You need `mint-token.sh` exactly twice: now, to bootstrap — `/admin.html` is
+behind the gate, so there's a chicken-and-egg to break — and after a key
+rotation. Open the link it prints; from then on issue passes from the **Access
+passes** panel on `/admin.html`.
+
+### Day to day
+
+Open `/admin.html`, enter who the pass is for, pick a duration, press **Create
+pass**. You get a link, a copy button, and a pre-written email. Minting happens
+at the edge (`/mint`), authenticated by your own admin cookie — the page only
+ever asks for a link.
+
+### Revoking
+
+Passes expire by themselves, which is the intended mechanism. To cut off
+**every** outstanding pass at once — a key rotation:
+
+```bash
+./deploy/publish-auth.sh --rotate
+```
+
+That voids yours too, so mint a fresh admin pass straight afterwards. There is
+deliberately no per-pass revocation: it would need stored state, and short
+passes make it unnecessary. To open the archive to the public again,
+`./deploy/publish-auth.sh --detach`.
+
+### What this does and doesn't give you
+
+- A link works for **whoever holds it**. If a reader forwards their email, it
+  works for the recipient until it expires. That is what the one-day pass is
+  for — prefer it for a one-off enquiry.
+- It controls **delivery, not redistribution**. Anyone admitted can download
+  what they can see. It's access control, not rights management — worth being
+  explicit about with the Railway.
+- Keep the cache policy's cookie behaviour set to **`none`** so the pass cookie
+  stays out of the cache key; `publish-auth.sh` warns if it isn't.
+
+### Testing
+
+```bash
+node tools/test_auth.js
+```
+
+50 assertions over the real `edge-auth.js`, loaded into a stub of the CloudFront
+runtime: issuing, expiry, forgery and privilege-escalation attempts, routing for
+each role, redeeming, and a check that `mint-token.sh` (openssl) and the edge
+(`crypto`) agree on the signature — if those drifted apart, bootstrapping would
+silently break.
 
 ---
 
@@ -234,9 +339,14 @@ data/tr.xml                     # source MODES XML export (2,136 objects)
 tools/build_catalogue.py        # XML -> catalogue.json compiler
 web/index.html                  # the single-page app (search, facets, viewer)
 web/admin.html                  # in-browser tool to regenerate catalogue.json
+web/gate.html                   # "you need a pass" landing / redeem page
 web/catalogue.json              # generated data
 deploy/publish-site.sh          # push index/admin/catalogue to S3 + invalidate CF
 deploy/publish-catalogue.sh     # push just catalogue.json + invalidate CF (Mark)
+deploy/edge-auth.js             # CloudFront Function: the access-pass gate
+deploy/publish-auth.sh          # install/update/rotate/detach the gate
+deploy/mint-token.sh            # mint a pass from the CLI (bootstrap + break-glass)
+tools/test_auth.js              # tests for the gate (node tools/test_auth.js)
 deploy/aws-oidc-setup.sh        # one-time IAM: OIDC role for S3 + CloudFront deploy
 deploy/s3-*.{sh,json}           # optional CORS/public-read (non-CloudFront setups)
 .github/workflows/deploy-site.yml  # CI: deploy app shell to S3 + CloudFront (OIDC)
