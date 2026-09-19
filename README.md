@@ -207,6 +207,44 @@ each role, redeeming, and a check that `mint-token.sh` (openssl) and the edge
 (`crypto`) agree on the signature — if those drifted apart, bootstrapping would
 silently break.
 
+To click through it rather than read assertions, see
+[Try it locally](#try-it-locally--with-the-gate) — no AWS account needed.
+
+---
+
+## Try it locally — with the gate
+
+You don't need AWS, the bucket, or any credentials to exercise the access
+passes. You do need more than a static server, though: `vite`, `http-server`
+and `python3 -m http.server` will serve `web/` happily but won't run
+`edge-auth.js`, so you'd be looking at the old, ungated site.
+
+```bash
+node tools/serve-local.js          # then open the links it prints
+```
+
+That puts the **real edge function in front of the real files**: it loads
+`deploy/edge-auth.js` into a stub of the CloudFront runtime, turns each request
+into a CloudFront event, and either serves the file or returns whatever the
+function decided. Passes, redeeming, expiry, roles and minting all behave as
+they will in production.
+
+It prints an administrator link and a reader link to start from. Sign in as the
+reader and `/admin.html` turns you away; sign in as the administrator and you
+can mint further passes from the **Access passes** panel — the links it
+generates work immediately in a private window. The dev signing key is fixed,
+so passes survive a restart, and `--port=9000` moves it off 8080. Scans aren't
+in the repo, so images show as placeholders; everything else is the real
+catalogue.
+
+**What this can't tell you:** whether the *deployment* works — the 10 KB and
+1 ms CloudFront limits, and whether the runtime really offers
+`crypto.createHmac`. `deploy/publish-auth.sh` checks all of that against
+CloudFront itself, in its sandbox, before publishing anything.
+
+Note that `docker compose up` (below) serves `web/` through nginx with **no
+gate** — useful for working on the catalogue UI, not for testing access.
+
 ---
 
 ## Run it locally with Docker  ← hand this to your mate
@@ -347,6 +385,7 @@ deploy/edge-auth.js             # CloudFront Function: the access-pass gate
 deploy/publish-auth.sh          # install/update/rotate/detach the gate
 deploy/mint-token.sh            # mint a pass from the CLI (bootstrap + break-glass)
 tools/test_auth.js              # tests for the gate (node tools/test_auth.js)
+tools/serve-local.js            # run the site locally with the gate in front
 deploy/aws-oidc-setup.sh        # one-time IAM: OIDC role for S3 + CloudFront deploy
 deploy/s3-*.{sh,json}           # optional CORS/public-read (non-CloudFront setups)
 .github/workflows/deploy-site.yml  # CI: deploy app shell to S3 + CloudFront (OIDC)
