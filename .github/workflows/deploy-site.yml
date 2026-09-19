@@ -3,7 +3,7 @@ name: Deploy site to S3 + CloudFront
 # Static hosting — no server. On a change to the app shell, upload it to the S3
 # bucket and invalidate CloudFront. Auth is via OIDC (no stored AWS keys).
 #
-# NOTE: this deploys index.html + admin.html only. catalogue.json is deliberately
+# NOTE: this deploys index.html + admin.html + gate.html only. catalogue.json is deliberately
 # NOT touched here — it is owned by the admin/publish flow (Mark's uploads via
 # deploy/publish-catalogue.sh), so a code deploy never clobbers live data.
 # Bootstrap the first catalogue.json with deploy/publish-site.sh.
@@ -17,6 +17,7 @@ on:
     paths:
       - "web/index.html"
       - "web/admin.html"
+      - "web/gate.html"
       - ".github/workflows/deploy-site.yml"
 
 env:
@@ -48,6 +49,8 @@ jobs:
             --content-type text/html --cache-control no-cache
           aws s3 cp web/admin.html s3://$BUCKET/admin.html \
             --content-type text/html --cache-control no-cache
+          aws s3 cp web/gate.html s3://$BUCKET/gate.html \
+            --content-type text/html --cache-control no-cache
 
       - name: Invalidate CloudFront
         run: |
@@ -55,10 +58,10 @@ jobs:
             --query "DistributionList.Items[?DomainName=='$CF_DOMAIN'].Id | [0]" --output text)
           echo "distribution: $DIST_ID"
           aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
-            --paths /index.html /admin.html
+            --paths /index.html /admin.html /gate.html
 
       - name: Summary
         run: |
-          echo "Deployed **index.html** + **admin.html** to https://$CF_DOMAIN/" >> $GITHUB_STEP_SUMMARY
+          echo "Deployed **index.html** + **admin.html** + **gate.html** to https://$CF_DOMAIN/" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "catalogue.json is managed via the admin / \`publish-catalogue.sh\` flow." >> $GITHUB_STEP_SUMMARY

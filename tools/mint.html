@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Issue a Pass — Talyllyn Railway Archive</title>
+<style>
+:root{
+  --paper:#e9ebe4; --surface:#f3f4ef; --surface-2:#dfe2d8;
+  --ink:#182420; --ink-soft:#42504a; --muted:#5c6b6e;
+  --line:#c9cdbf; --line-soft:#d7dacf;
+  --green:#215c3f; --green-bright:#2c7a53; --brass:#b07d33; --brass-soft:#f0e4cd;
+  --danger:#9c3b2e; --shadow:0 1px 2px rgba(24,36,32,.06),0 6px 24px rgba(24,36,32,.08);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#131917; --surface:#1a221f; --surface-2:#222b28;
+    --ink:#e8ede8; --ink-soft:#bcc7c1; --muted:#8fa19a;
+    --line:#2c3833; --line-soft:#26302c;
+    --green:#4fae7d; --green-bright:#63c493; --brass:#d9a95a; --brass-soft:#33301f;
+    --danger:#e08b7c; --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 24px rgba(0,0,0,.35);
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:600;margin:0}
+a{color:var(--green)}
+header{border-bottom:2px solid var(--ink);background:var(--surface);padding:16px clamp(16px,4vw,40px);display:flex;align-items:center;gap:14px}
+.crest{width:42px;height:42px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-family:Georgia,serif;font-weight:700;font-size:18px}
+header .sub{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+main{max-width:660px;margin:0 auto;padding:26px clamp(16px,4vw,40px) 80px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px clamp(18px,4vw,26px);margin-bottom:18px;box-shadow:var(--shadow)}
+.card h2{font-size:18px;margin-bottom:8px}
+.card p{color:var(--ink-soft);margin:8px 0 0}
+.muted{color:var(--muted)}
+label.fld{display:block;margin-top:16px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+input,select{width:100%;margin-top:7px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);color:var(--ink);font:14px/1.4 inherit}
+input.mono{font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+input:focus,select:focus{outline:2px solid var(--green);outline-offset:1px;border-color:var(--green)}
+.row{display:flex;gap:14px;flex-wrap:wrap}.row>*{flex:1 1 210px;min-width:0}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--green);color:#fff;border:0;border-radius:8px;
+  padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer;margin-top:16px;text-decoration:none}
+.btn:hover{background:var(--green-bright)}.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.secondary{background:transparent;color:var(--green);border:1px solid var(--line)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.msg{margin-top:14px;padding:11px 14px;border-radius:8px;font-size:13.5px}
+.msg.err{background:var(--brass-soft);color:var(--danger);border:1px solid var(--danger)}
+.msg.ok{background:var(--brass-soft);color:var(--ink-soft)}
+.hidden{display:none}
+.note{padding:11px 14px;border-radius:8px;font-size:13.5px;background:var(--brass-soft);color:var(--ink-soft);border:1px solid var(--line)}
+.warn{color:var(--brass);font-weight:600}
+code{background:var(--surface-2);padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+<header>
+  <div class="crest">TR</div>
+  <div>
+    <h1>Issue a Pass</h1>
+    <div class="sub">Talyllyn Railway Archive · recovery tool</div>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <p class="note"><span class="warn">You shouldn't normally need this page.</span>
+      Passes are issued from <code>/admin.html</code> on the archive itself. Use this
+      only when that isn't possible &mdash; because an administrator pass has expired,
+      or because you're setting the archive up for the first time.</p>
+
+    <h2 style="margin-top:20px">Signing key</h2>
+    <p>The key is in the gate function: AWS console &rarr; CloudFront &rarr; Functions
+       &rarr; <code>tr-archive-auth</code> &rarr; <b>Build</b>, on the line beginning
+       <code>var SECRET</code>. Copy what's between the quotes.</p>
+    <label class="fld" for="key">Key
+      <input type="text" class="mono" id="key" placeholder="26d66cf5…" autocomplete="off" spellcheck="false">
+    </label>
+    <p class="muted" style="font-size:13px;margin-top:10px">This page does no networking
+       whatsoever &mdash; the key is used in your browser and goes nowhere. You can check
+       that yourself: it's a single file with no <code>fetch</code> in it, and it works
+       with the network unplugged.</p>
+  </div>
+
+  <div class="card">
+    <h2>The pass</h2>
+    <div class="row">
+      <label class="fld">Who is it for?
+        <input type="text" id="sub" placeholder="name@example.org" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="fld">How long?
+        <select id="type">
+          <option value="3">One day</option>
+          <option value="2">Two weeks</option>
+          <option value="1" selected>Administrator (one year)</option>
+        </select>
+      </label>
+    </div>
+    <label class="fld">Archive address
+      <input type="text" id="host" value="dmfmj7c4s21wr.cloudfront.net" autocomplete="off" spellcheck="false">
+    </label>
+
+    <button class="btn" id="make">Create pass</button>
+    <div id="msg"></div>
+
+    <div id="out" class="hidden">
+      <label class="fld" for="link">The link to open (or send)</label>
+      <input type="text" class="mono" id="link" readonly>
+      <div class="actions">
+        <button class="btn secondary" id="copy">Copy link</button>
+        <a class="btn secondary" id="open" href="#" target="_blank" rel="noopener">Open it</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* Mints exactly what deploy/edge-auth.js verifies:
+     <who>~<role>~<expiry>~<key version>.<hmac-sha256-hex>
+   Using the browser's own Web Crypto, so there is nothing to install and
+   nothing leaves this page. tools/test_auth.js checks this agrees with the
+   edge function and with tools/mint.js. */
+const TYPES = {
+  '1': { role:'a', ttl:31536000, label:'administrator pass (1 year)' },
+  '2': { role:'p', ttl:1209600,  label:'reader pass (14 days)' },
+  '3': { role:'p', ttl:86400,    label:'reader pass (24 hours)' }
+};
+const KID = '1';
+
+async function mintToken(key, who, type, nowMs) {
+  const t = TYPES[type];
+  if (!t) throw new Error('Unknown pass type.');
+  if (!key) throw new Error('Enter the signing key.');
+  // Same sanitising as the edge, so a name can't smuggle in the field
+  // separator and forge itself a different role.
+  const sub = String(who).replace(/[^A-Za-z0-9@._+-]/g, '').slice(0, 64);
+  if (!sub) throw new Error('Enter who the pass is for.');
+
+  const exp = Math.floor((nowMs === undefined ? Date.now() : nowMs) / 1000) + t.ttl;
+  const payload = sub + '~' + t.role + '~' + exp + '~' + KID;
+  const enc = new TextEncoder();
+  const ck = await crypto.subtle.importKey('raw', enc.encode(key), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', ck, enc.encode(payload));
+  const hex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('');
+  return { token: payload + '.' + hex, exp: exp, label: t.label, sub: sub };
+}
+if (typeof window !== 'undefined') window.mintToken = mintToken;
+
+if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', function () {
+  const $ = (id) => document.getElementById(id);
+  const say = (t, c) => { $('msg').innerHTML = t ? '<div class="msg ' + c + '">' + t + '</div>' : ''; };
+
+  $('make').addEventListener('click', async function () {
+    $('out').classList.add('hidden'); say('', '');
+    if (!(window.crypto && window.crypto.subtle)) {
+      say('This browser won’t do the cryptography from a local file. Try Chrome, Edge or Firefox.', 'err');
+      return;
+    }
+    try {
+      const r = await mintToken($('key').value.trim(), $('sub').value.trim(), $('type').value);
+      const host = $('host').value.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      if (!host) throw new Error('Enter the archive address.');
+      const link = 'https://' + host + '/access?t=' + r.token;
+      $('link').value = link;
+      $('open').href = link;
+      $('out').classList.remove('hidden');
+      say('Created ' + r.label + ' for <b>' + r.sub.replace(/[<&]/g, '') + '</b>, valid until '
+        + new Date(r.exp * 1000).toLocaleDateString(undefined, { day:'numeric', month:'long', year:'numeric' })
+        + '.', 'ok');
+    } catch (e) { say(e.message, 'err'); }
+  });
+
+  $('copy').addEventListener('click', function () {
+    $('link').select(); $('link').setSelectionRange(0, 99999);
+    const done = () => { $('copy').textContent = 'Copied'; setTimeout(() => { $('copy').textContent = 'Copy link'; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText($('link').value).then(done, () => { document.execCommand('copy'); done(); });
+    else { document.execCommand('copy'); done(); }
+  });
+});
+</script>
+</body>
+</html>

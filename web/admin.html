@@ -58,6 +58,23 @@ pre{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;p
 ol.pub{margin:10px 0 0;padding-left:20px}
 ol.pub li{margin:6px 0}
 .warn{color:var(--brass);font-weight:600}
+.sect{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  font-family:inherit;font-weight:600;margin:34px 0 14px;padding-top:26px;border-top:1px solid var(--line)}
+.fld{display:block;margin-top:16px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.fld input,.fld select{width:100%;margin-top:7px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);color:var(--ink);font:14px/1.4 inherit}
+.fld input:focus,.fld select:focus{outline:2px solid var(--green);outline-offset:1px;border-color:var(--green)}
+.row{display:flex;gap:14px;flex-wrap:wrap}
+.row>*{flex:1 1 200px;min-width:0}
+.linkout{width:100%;margin-top:7px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);color:var(--ink);font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+a.btn{text-decoration:none}
+#renewBanner .msg{margin:0 0 20px;padding:14px 16px;border:1px solid var(--brass);
+  background:var(--brass-soft);color:var(--ink-soft);display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+#renewBanner .msg b{color:var(--brass)}
+#renewBanner .btn{margin-top:0;padding:8px 14px}
+#renewBanner .grow{flex:1 1 280px;min-width:0}
 </style>
 </head>
 <body>
@@ -70,6 +87,8 @@ ol.pub li{margin:6px 0}
 </header>
 
 <main>
+  <div id="renewBanner" class="hidden"></div>
+
   <div class="step">
     <h2><span class="num">1</span> Choose the MODES export</h2>
     <p>When new artifacts are added, export the collection from MODES as XML and drop the
@@ -118,6 +137,54 @@ ol.pub li{margin:6px 0}
        (e.g. <code class="mono">Z-DDJ-1-51a.jpeg</code>, <code class="mono">z-ddj-1-27.pdf</code>)
        and ride along on the same GoodSync. Only <code>catalogue.json</code> needs the
        cache-clearing step — new files don't.</p>
+  </div>
+
+  <h2 class="sect">Access passes</h2>
+
+  <div class="step">
+    <h2>Issue a pass</h2>
+    <p>The archive is private. Create a pass here, then email the link to the person —
+       opening it lets them in for as long as the pass lasts, with nothing to type.
+       Passes expire on their own; there is no list to tidy up afterwards.</p>
+
+    <div class="row">
+      <label class="fld">Who is it for?
+        <input type="text" id="passSub" placeholder="name@example.org" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="fld">How long?
+        <select id="passType">
+          <option value="3">One day</option>
+          <option value="2" selected>Two weeks</option>
+          <option value="1">Administrator (one year)</option>
+        </select>
+      </label>
+    </div>
+    <p class="muted" style="margin-top:10px;font-size:13px">The name is only recorded inside
+       the pass so you can tell later who it was issued to. An administrator pass also opens
+       this page &mdash; only issue one to someone who should be able to update the catalogue
+       and issue passes of their own.</p>
+
+    <div class="actions">
+      <button class="btn" id="passMake">Create pass</button>
+      <span class="muted" id="passExp"></span>
+    </div>
+
+    <div id="passOut" class="hidden">
+      <label class="fld" for="passLink">The link to send</label>
+      <input type="text" class="linkout" id="passLink" readonly>
+      <div class="actions">
+        <button class="btn secondary" id="passCopy">Copy link</button>
+        <a class="btn secondary" id="passMail" href="#">Write the email</a>
+      </div>
+    </div>
+    <div id="passMsg"></div>
+
+    <p class="muted" style="margin-top:18px;font-size:13px"><span class="warn">Worth knowing.</span>
+       Anyone who has the link can use it &mdash; if it's forwarded on, it works for whoever
+       receives it. That's why the shorter passes exist; prefer a day pass for a one-off
+       enquiry. To cut off <em>every</em> outstanding pass at once, a new
+       signing key is needed &mdash; see &ldquo;If a pass needs cancelling&rdquo; in
+       <code class="mono">deploy/INSTALL-AUTH.md</code>.</p>
   </div>
 </main>
 
@@ -251,6 +318,85 @@ document.getElementById("download").addEventListener("click", function(){
   a.href=url; a.download="catalogue.json"; document.body.appendChild(a); a.click();
   a.remove(); setTimeout(function(){URL.revokeObjectURL(url);}, 2000);
 });
+/* ---- Access passes -------------------------------------------------------
+   Minting happens at the edge (deploy/edge-auth.js), not here: the signing key
+   must never reach a browser. This page just asks for a link, authenticated by
+   the administrator's own pass cookie, which rides along automatically. */
+(function(){
+  var subEl=document.getElementById("passSub"), typeEl=document.getElementById("passType"),
+      btn=document.getElementById("passMake"), out=document.getElementById("passOut"),
+      linkEl=document.getElementById("passLink"), expEl=document.getElementById("passExp"),
+      msgEl=document.getElementById("passMsg"), copyBtn=document.getElementById("passCopy"),
+      mailEl=document.getElementById("passMail");
+
+  var LABEL={"1":"an administrator pass","2":"a two-week pass","3":"a one-day pass"};
+
+  function say(text, cls){ msgEl.innerHTML = text ? '<div class="msg '+cls+'">'+text+'</div>' : ''; }
+
+  btn.addEventListener("click", function(){
+    var sub=subEl.value.trim(), type=typeEl.value;
+    if(!sub){ say("Enter who the pass is for.","err"); subEl.focus(); return; }
+
+    btn.disabled=true; say("",""); out.classList.add("hidden"); expEl.textContent="";
+    fetch("/mint?type="+encodeURIComponent(type)+"&sub="+encodeURIComponent(sub))
+      .then(function(r){
+        if(r.status===403) throw new Error("Your own administrator pass has expired, or this isn't an administrator session. Open a current admin link and try again.");
+        if(!r.ok) throw new Error("The server refused that request (" + r.status + ").");
+        return r.json();
+      })
+      .then(function(d){
+        linkEl.value=d.link;
+        var when=new Date(d.expires);
+        expEl.textContent="Valid until "+when.toLocaleDateString(undefined,{day:"numeric",month:"long",year:"numeric"});
+        mailEl.href="mailto:"+encodeURIComponent(sub)
+          +"?subject="+encodeURIComponent("Access to the Talyllyn Railway Archive")
+          +"&body="+encodeURIComponent(
+            "Here is your link to the Talyllyn Railway archive catalogue:\n\n"+d.link
+            +"\n\nIt opens the archive until "+when.toDateString()
+            +". Please don't pass it on \u2014 it works for anyone who has it.\n");
+        out.classList.remove("hidden");
+        say("Created "+LABEL[type]+" for <b>"+sub.replace(/[<&]/g,"")+"</b>. Send them the link below.","ok");
+      })
+      .catch(function(e){ say(e.message,"err"); })
+      .then(function(){ btn.disabled=false; });
+  });
+
+  /* The pass cookie is HttpOnly, so this page can't read when its own pass
+     runs out. /whoami at the edge reports it. An administrator whose pass
+     lapses is locked out of this page and can't issue a replacement, so the
+     warning starts well before that happens. */
+  var WARN_DAYS = 45;
+  fetch("/whoami").then(function(r){ return r.ok ? r.json() : null; }).then(function(me){
+    if(!me || me.role !== "a") return;
+    var days = Math.ceil((me.exp*1000 - Date.now())/86400000);
+    if(days > WARN_DAYS) return;
+    var when = new Date(me.exp*1000).toLocaleDateString(undefined,{day:"numeric",month:"long",year:"numeric"});
+    var b = document.getElementById("renewBanner");
+    b.innerHTML = '<div class="msg"><div class="grow"><b>Your administrator pass expires '
+      + (days <= 0 ? 'today' : 'in ' + days + ' day' + (days===1?'':'s'))
+      + '</b> (' + when + '). Once it lapses you lose access to this page and can\'t issue '
+      + 'yourself a replacement \u2014 you would need the signing key. Renewing takes a moment.'
+      + '</div><button class="btn" id="renewNow">Renew for another year</button></div>';
+    b.classList.remove("hidden");
+    document.getElementById("renewNow").addEventListener("click", function(){
+      var btn = this; btn.disabled = true; btn.textContent = "Renewing\u2026";
+      fetch("/mint?type=1&sub=" + encodeURIComponent(me.sub))
+        .then(function(r){ if(!r.ok) throw new Error("refused ("+r.status+")"); return r.json(); })
+        .then(function(d){ location.href = d.link; })   // redeeming replaces the cookie
+        .catch(function(e){
+          btn.disabled = false; btn.textContent = "Renew for another year";
+          say("Could not renew: " + e.message + ". Use tools/mint.html with the signing key instead.","err");
+        });
+    });
+  }).catch(function(){ /* gate not installed yet, or offline — no banner */ });
+
+  copyBtn.addEventListener("click", function(){
+    linkEl.select(); linkEl.setSelectionRange(0,99999);
+    var done=function(){ copyBtn.textContent="Copied"; setTimeout(function(){copyBtn.textContent="Copy link";},1600); };
+    if(navigator.clipboard) navigator.clipboard.writeText(linkEl.value).then(done, function(){ document.execCommand("copy"); done(); });
+    else { document.execCommand("copy"); done(); }
+  });
+})();
 </script>
 </body>
 </html>
