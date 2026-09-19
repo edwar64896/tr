@@ -68,22 +68,75 @@ paste it into the code box, replacing the sample code. **Save changes.**
 ## 4. Test it before it goes anywhere near the site
 
 The **Test** tab runs the function in CloudFront's own sandbox. Nothing is live
-yet.
+yet, and you can run it as often as you like. It tests whatever is saved in the
+*Development* stage, so make sure you saved in step 3.
 
-**A stranger.** Stage *Development*, event type *Viewer request*, URL path `/`.
-**Test function**. You should see a `302` response with a `location` header of
+Set **Function stage** to `Development` and **Event type** to `Viewer request`.
+
+Then look for the option to edit the test event **as JSON** rather than filling
+in the form fields — the form makes you hunt for the cookie inputs, and their
+labels move between console versions. Paste each event below in turn and click
+**Test function**.
+
+**A stranger, with no pass:**
+
+```json
+{
+  "version": "1.0",
+  "context": { "eventType": "viewer-request" },
+  "viewer": { "ip": "203.0.113.1" },
+  "request": {
+    "method": "GET",
+    "uri": "/",
+    "querystring": {},
+    "headers": { "host": { "value": "YOUR-DOMAIN.cloudfront.net" } },
+    "cookies": {}
+  }
+}
+```
+
+Expect a **`response`** with `statusCode` 302 and a `location` of
 `/gate.html` — the visitor is being sent to the "you need a pass" page.
 
-**You.** Same again, but add a cookie: name `tr_pass`, value = the part of your
-link from step 2 **after** `?t=` (everything from your email address to the end
-of the long run of letters and numbers). This time the output should show the
-*request* passing through rather than a 302.
+**You, with the pass from step 2.** Replace `PASTE_YOUR_TOKEN_HERE` with
+everything in your link after `?t=`:
 
-Also note **Compute utilization** in the result — it should be comfortably
-under 100.
+```json
+{
+  "version": "1.0",
+  "context": { "eventType": "viewer-request" },
+  "viewer": { "ip": "203.0.113.1" },
+  "request": {
+    "method": "GET",
+    "uri": "/",
+    "querystring": {},
+    "headers": { "host": { "value": "YOUR-DOMAIN.cloudfront.net" } },
+    "cookies": {
+      "tr_pass": { "value": "PASTE_YOUR_TOKEN_HERE", "attributes": "" }
+    }
+  }
+}
+```
 
-If the first test errors rather than returning a 302, the runtime is wrong or
-the paste was incomplete. Fix it before going on.
+Expect the **`request`** handed straight back, unchanged.
+
+> `attributes` is required by the console's event validator even though it only
+> means anything on a *response* cookie. Leave it as an empty string. Omitting
+> it makes the console reject the event before the function ever runs.
+
+**That difference is the whole test.** A `response` means the function
+intervened and turned the request away; a `request` handed back means it
+approved it and CloudFront carries on to S3. The first must be a response, the
+second a request.
+
+Also note **Compute utilization** in the result — a number out of 100, how much
+of the function's 1 ms budget was used. Under about 40 is comfortable.
+
+If the first test **errors** rather than returning a 302, the runtime is almost
+certainly wrong: on `cloudfront-js-1.0` the cryptography the passes rely on
+doesn't exist and it fails immediately. That needs a new function, not an edit.
+If the first test hands back a `request`, the paste was incomplete — re-copy
+the whole file including the final `}`.
 
 You can now delete `deploy/edge-auth.ready.js`.
 

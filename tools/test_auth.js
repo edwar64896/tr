@@ -240,5 +240,30 @@ section('the console install path (tools/mint.js)');
   if (hadReady) fs.writeFileSync(ready, backup); else fs.unlinkSync(ready);
 }
 
+// ------------------------------------- the console's own test-event shape
+/* The CloudFront console validates a pasted test event against the full cookie
+   schema, so deploy/INSTALL-AUTH.md tells the operator to include
+   "attributes" — a field that only means anything on a response cookie. Make
+   sure carrying it never changes the verdict, or the runbook would be handing
+   people an event that tests something other than what production does. */
+section("console test events (INSTALL-AUTH.md step 4)");
+{
+  const ev = (cookies) => ({ request: {
+    method: 'GET', uri: '/', querystring: {},
+    headers: { host: { value: 'archive.example.net' } }, cookies } });
+
+  const tok = issue('mark@example.org', '1').token;
+  ok('stranger event returns a response, not a request',
+    handler(ev({})).statusCode === 302);
+  ok('pass with attributes:"" is let through',
+    handler(ev({ tr_pass: { value: tok, attributes: '' } })).uri === '/');
+  ok('pass with a populated attributes string is let through',
+    handler(ev({ tr_pass: { value: tok, attributes: 'Path=/; Secure; HttpOnly' } })).uri === '/');
+  ok('pass with no attributes field at all is let through',
+    handler(ev({ tr_pass: { value: tok } })).uri === '/');
+  ok('attributes cannot smuggle in a valid pass',
+    handler(ev({ tr_pass: { value: 'forged', attributes: tok } })).statusCode === 302);
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
