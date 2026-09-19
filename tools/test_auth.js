@@ -30,6 +30,8 @@ vm.createContext(ctx);
 vm.runInContext(SRC.replace('REPLACE_AT_DEPLOY', SECRET) + '\nthis.__api = { handler, verify, issue };', ctx);
 const { handler, verify, issue } = ctx.__api;
 
+const readSrcWrap = (src) => src + '\nthis.__api = { handler, verify, issue };';
+
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
   if (cond) { pass++; console.log('  ok   ' + name); }
@@ -178,6 +180,64 @@ section('deploy/mint-token.sh interoperates with the edge');
   let refused = false;
   try { run(['--type', '9', '--for', 'x@y.z']); } catch (e) { refused = true; }
   ok('shell refuses an unknown type', refused);
+}
+
+// -------------------------------------------- the console install path
+/* deploy/INSTALL-AUTH.md has the client generate a key with
+   `node tools/mint.js --new-key`, paste deploy/edge-auth.ready.js into the
+   CloudFront console, and mint their first administrator pass with the same
+   key. Nothing in that path touches AWS or the shell scripts, so run it here
+   for real: generate, load the *generated* file as the edge, and mint against
+   it. If these drifted, the client would paste in a working gate and then be
+   unable to get through it. */
+section('the console install path (tools/mint.js)');
+{
+  const { execFileSync } = require('child_process');
+  const mint = path.join(__dirname, 'mint.js');
+  const ready = path.join(__dirname, '..', 'deploy', 'edge-auth.ready.js');
+  const hadReady = fs.existsSync(ready);
+  const backup = hadReady ? fs.readFileSync(ready) : null;
+
+  const gen = execFileSync('node', [mint, '--new-key'], { encoding: 'utf8' });
+  const key = (gen.match(/^\s*([0-9a-f]{64})\s*$/m) || [])[1];
+  ok('--new-key generates a key', !!key);
+  ok('--new-key writes the ready-to-paste function', fs.existsSync(ready));
+
+  const readySrc = fs.readFileSync(ready, 'utf8');
+  ok('the key is substituted in', readySrc.includes(key) && !readySrc.includes('REPLACE_AT_DEPLOY'));
+  ok('it still fits a CloudFront Function', Buffer.byteLength(readySrc) <= 10240);
+
+  // Load the generated file as the edge would.
+  const c2 = {
+    require: (m) => { if (m === 'crypto') return nodeCrypto; throw new Error('no module ' + m); },
+    Date: MockDate, JSON, Math, String, parseInt, decodeURIComponent, console,
+  };
+  vm.createContext(c2);
+  vm.runInContext(readSrcWrap(readySrc), c2);
+  const edge = c2.__api;
+
+  const out = execFileSync('node', [mint, '--key', key, '--type', '1', '--for', 'client@example.org', '--host', 'archive.example.net'], { encoding: 'utf8' });
+  const token = (out.match(/\/access\?t=(\S+)/) || [])[1];
+  ok('mints a link against that key', !!token);
+
+  const c = token && edge.verify(token);
+  ok('the pasted function accepts it', !!c && !c.expired && c.role === 'a');
+  ok('and lets it reach the admin page',
+    edge.handler({ request: { uri: '/admin.html', querystring: {}, cookies: { tr_pass: { value: token } }, headers: {} } }).uri === '/admin.html');
+  ok('a stranger is still turned away',
+    edge.handler({ request: { uri: '/', querystring: {}, cookies: {}, headers: {} } }).statusCode === 302);
+
+  // A key from a different install must not open this one.
+  const otherGen = execFileSync('node', [mint, '--key', 'a-different-key', '--type', '1', '--for', 'eve@example.org'], { encoding: 'utf8' });
+  ok('a pass signed with another key is refused',
+    edge.verify((otherGen.match(/\/access\?t=(\S+)/) || [])[1]) === null);
+
+  let refused = false;
+  try { execFileSync('node', [mint, '--type', '1', '--for', 'x@y.z'], { encoding: 'utf8', stdio: 'pipe' }); }
+  catch (e) { refused = true; }
+  ok('minting without a key is refused', refused);
+
+  if (hadReady) fs.writeFileSync(ready, backup); else fs.unlinkSync(ready);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

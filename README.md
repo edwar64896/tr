@@ -148,6 +148,14 @@ no cleaning up.
 
 ### Setting it up
 
+**From a browser** (no AWS CLI) — follow
+**[`deploy/INSTALL-AUTH.md`](deploy/INSTALL-AUTH.md)**. It generates the key
+locally with Node, then walks through the CloudFront console click by click.
+This is the route to hand to whoever operates the site, since their other
+routines (GoodSync, cache invalidations) are already console-based.
+
+**From a terminal**, if you have the AWS CLI and credentials:
+
 ```bash
 ./deploy/publish-auth.sh                              # install + attach the gate
 ./deploy/mint-token.sh --type 1 --for you@example.org # your own admin pass
@@ -158,10 +166,24 @@ no cleaning up.
 runtime really offers `crypto.createHmac`), attaches it, and publishes
 `gate.html`. Changes take about five minutes to reach every edge.
 
-You need `mint-token.sh` exactly twice: now, to bootstrap — `/admin.html` is
+You need a minting tool exactly twice: now, to bootstrap — `/admin.html` is
 behind the gate, so there's a chicken-and-egg to break — and after a key
-rotation. Open the link it prints; from then on issue passes from the **Access
-passes** panel on `/admin.html`.
+rotation. `mint-token.sh` reads the key from SSM; `tools/mint.js` takes it
+directly and needs nothing but Node, which is what the console route uses. Open
+the link it prints; from then on issue passes from the **Access passes** panel
+on `/admin.html`.
+
+### It does not change how content is uploaded
+
+Scans and `catalogue.json` still go up through GoodSync exactly as before, and
+new uploads are covered by the gate automatically. GoodSync writes to S3
+through the S3 API; the function only inspects requests arriving at the
+CloudFront address visitors use. The two never meet.
+
+The one thing to watch is that **`gate.html` must be in the bucket** — it's a
+site file like `index.html` and `admin.html`, deployed by CI. If a GoodSync job
+is configured to delete destination files that aren't in the local folder, it
+will remove all three.
 
 ### Day to day
 
@@ -384,8 +406,10 @@ deploy/publish-catalogue.sh     # push just catalogue.json + invalidate CF (Mark
 deploy/edge-auth.js             # CloudFront Function: the access-pass gate
 deploy/publish-auth.sh          # install/update/rotate/detach the gate
 deploy/mint-token.sh            # mint a pass from the CLI (bootstrap + break-glass)
+deploy/INSTALL-AUTH.md          # console walkthrough for turning the gate on
 tools/test_auth.js              # tests for the gate (node tools/test_auth.js)
 tools/serve-local.js            # run the site locally with the gate in front
+tools/mint.js                   # generate the key / mint a pass, no AWS needed
 deploy/aws-oidc-setup.sh        # one-time IAM: OIDC role for S3 + CloudFront deploy
 deploy/s3-*.{sh,json}           # optional CORS/public-read (non-CloudFront setups)
 .github/workflows/deploy-site.yml  # CI: deploy app shell to S3 + CloudFront (OIDC)
